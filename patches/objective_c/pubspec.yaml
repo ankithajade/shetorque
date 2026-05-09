@@ -1,0 +1,12 @@
+name: objective_c
+version: 9.3.0
+description: Local stub to avoid native-assets hook failure during Android build
+environment:
+  sdk: ">=2.18.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+flutter:
+  # No assets

@@ -1,0 +1,573 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SheTorque Hub — Project Documentation</title>
+  <style>
+    /* ===== PRINT-READY STYLING ===== */
+    @page { margin: 20mm 18mm; size: A4; }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', Arial, sans-serif;
+      color: #1a1a1a;
+      line-height: 1.7;
+      font-size: 13px;
+      padding: 0 40px;
+    }
+
+    /* Cover Page */
+    .cover {
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      min-height: 95vh; text-align: center;
+      page-break-after: always;
+    }
+    .cover h1 { font-size: 42px; color: #1565c0; margin-bottom: 10px; letter-spacing: 2px; }
+    .cover .subtitle { font-size: 20px; color: #555; margin-bottom: 30px; }
+    .cover .meta { font-size: 14px; color: #777; line-height: 2; }
+
+    /* Section headings */
+    h2 {
+      font-size: 22px; color: #1565c0; border-bottom: 2px solid #1565c0;
+      padding-bottom: 6px; margin: 30px 0 14px 0;
+      page-break-after: avoid;
+    }
+    h3 { font-size: 16px; color: #333; margin: 18px 0 8px 0; page-break-after: avoid; }
+    h4 { font-size: 14px; color: #444; margin: 14px 0 6px 0; }
+
+    p, li { margin-bottom: 6px; }
+    ul, ol { padding-left: 22px; }
+    table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 12.5px; }
+    th, td { border: 1px solid #ddd; padding: 8px 10px; text-align: left; }
+    th { background: #e3f2fd; color: #1565c0; }
+    tr:nth-child(even) { background: #fafafa; }
+
+    code, pre {
+      font-family: 'Consolas', 'Fira Code', monospace; font-size: 12px;
+      background: #f5f5f5; border-radius: 4px;
+    }
+    code { padding: 2px 5px; }
+    pre { padding: 14px; overflow-x: auto; margin: 10px 0; border: 1px solid #e0e0e0; white-space: pre-wrap; word-wrap: break-word; }
+
+    .note-box {
+      background: #e3f2fd; border-left: 4px solid #1565c0;
+      padding: 12px 16px; margin: 14px 0; border-radius: 0 6px 6px 0;
+    }
+    .warn-box {
+      background: #fff3e0; border-left: 4px solid #ef6c00;
+      padding: 12px 16px; margin: 14px 0; border-radius: 0 6px 6px 0;
+    }
+
+    .flow-diagram {
+      text-align: center; padding: 20px; margin: 16px 0;
+      background: #fafafa; border: 1px solid #e0e0e0; border-radius: 8px;
+      font-family: monospace; font-size: 13px; line-height: 1.4;
+    }
+
+    .badge {
+      display: inline-block; padding: 3px 10px; border-radius: 12px;
+      font-size: 11px; font-weight: 600; color: #fff; margin: 2px;
+    }
+    .badge-blue   { background: #1565c0; }
+    .badge-green  { background: #2e7d32; }
+    .badge-orange { background: #ef6c00; }
+    .badge-red    { background: #c62828; }
+
+    .toc a { text-decoration: none; color: #1565c0; }
+    .toc li { margin-bottom: 4px; }
+    .toc ul { list-style: none; }
+    .toc ul ul { padding-left: 20px; }
+
+    @media print {
+      body { padding: 0; }
+      .no-print { display: none; }
+    }
+
+    footer { text-align: center; color: #999; font-size: 11px; padding: 30px 0 10px; border-top: 1px solid #eee; margin-top: 40px; }
+  </style>
+</head>
+<body>
+
+<!-- ===================== COVER PAGE ===================== -->
+<div class="cover">
+  <h1>🏍️ SHETORQUE HUB</h1>
+  <div class="subtitle">Intelligent Rider Safety & Crash Detection System</div>
+  <p style="font-size:16px; color:#888; margin-bottom: 40px;">Complete Project Documentation</p>
+  <div class="meta">
+    <strong>Platform:</strong> Flutter (Cross-platform Mobile) & Android Native<br>
+    <strong>Version:</strong> 1.0.0+1<br>
+    <strong>Date:</strong> May 2026<br>
+  </div>
+</div>
+
+<!-- ===================== TABLE OF CONTENTS ===================== -->
+<div class="toc">
+  <h2>Table of Contents</h2>
+  <ul>
+    <li><a href="#abstract">1. Abstract</a></li>
+    <li><a href="#introduction">2. Introduction</a>
+      <ul>
+        <li><a href="#problem">2.1 Problem Statement</a></li>
+        <li><a href="#objectives">2.2 Objectives</a></li>
+        <li><a href="#scope">2.3 Scope</a></li>
+      </ul>
+    </li>
+    <li><a href="#literature">3. Literature Survey</a></li>
+    <li><a href="#system-reqs">4. System Requirements</a></li>
+    <li><a href="#architecture">5. System Architecture & Design</a>
+      <ul>
+        <li><a href="#high-level">5.1 High-Level Architecture</a></li>
+        <li><a href="#data-flow">5.2 Data Flow Diagram</a></li>
+        <li><a href="#state-machine">5.3 Application State Machine</a></li>
+        <li><a href="#class-struct">5.4 Class Structure</a></li>
+      </ul>
+    </li>
+    <li><a href="#implementation">6. Implementation Details</a>
+      <ul>
+        <li><a href="#tech-stack">6.1 Technology Stack</a></li>
+        <li><a href="#dependencies">6.2 Dependencies</a></li>
+        <li><a href="#sensor-fusion">6.3 Sensor Fusion & G-Force Calculation</a></li>
+        <li><a href="#crash-detection">6.4 Crash Detection Algorithm</a></li>
+        <li><a href="#countdown">6.5 Countdown & Cancel Mechanism</a></li>
+        <li><a href="#sos">6.6 Fully Automatic SOS Emergency Alert System</a></li>
+        <li><a href="#audio">6.7 Audio Siren System</a></li>
+        <li><a href="#permissions">6.8 Permissions & Runtime Handling</a></li>
+        <li><a href="#ui-design">6.9 User Interface Design</a></li>
+      </ul>
+    </li>
+    <li><a href="#source-code">7. Complete Source Code</a></li>
+    <li><a href="#testing">8. Testing</a></li>
+    <li><a href="#screenshots">9. Screenshots / UI States</a></li>
+    <li><a href="#limitations">10. Limitations</a></li>
+    <li><a href="#future-scope">11. Future Scope</a></li>
+    <li><a href="#conclusion">12. Conclusion</a></li>
+    <li><a href="#references">13. References</a></li>
+  </ul>
+</div>
+
+<!-- ===================== 1. ABSTRACT ===================== -->
+<h2 id="abstract">1. Abstract</h2>
+<p>
+  <strong>SheTorque Hub</strong> is a mobile application built with Flutter and native Android code that transforms a smartphone into an intelligent
+  crash detection and emergency alert system for motorcycle and two-wheeler riders. The application leverages the
+  device's built-in accelerometer via IMU sensor fusion to continuously monitor G-force in real time. When a sudden
+  impact exceeding a configurable threshold (default 25 G) is detected, the app triggers a multi-layered emergency
+  response protocol: an audible siren alarm, a 90-second countdown allowing the rider to cancel if it is a false
+  positive, and — upon countdown expiry without cancellation — <strong>fully automatic background dispatch</strong> of an emergency SMS containing the
+  rider's precise GPS coordinates to a pre-configured emergency contact, requiring zero human interaction.
+</p>
+
+<!-- ===================== 2. INTRODUCTION ===================== -->
+<h2 id="introduction">2. Introduction</h2>
+
+<h3 id="problem">2.1 Problem Statement</h3>
+<p>
+  Two-wheeler accidents are among the leading causes of road fatalities worldwide. In many crash scenarios, the rider
+  is incapacitated and unable to call for help. Existing commercial solutions are often hardware-dependent
+  and prohibitively expensive. There is a clear need for a software-only 
+  solution that leverages existing smartphone hardware to natively and autonomously alert emergency contacts with 
+  location information without requiring the injured rider to press "Send".
+</p>
+
+<h3 id="objectives">2.2 Objectives</h3>
+<ul>
+  <li>Detect potential crash events in real time using the smartphone's built-in accelerometer.</li>
+  <li>Provide an audible siren alarm to draw immediate attention to the scene.</li>
+  <li>Implement a configurable countdown period (90 seconds) to avoid false-positive SOS alerts.</li>
+  <li><strong>Automatically send an emergency SMS via native Android APIs</strong> with the rider's GPS location upon countdown expiry, with no user interaction.</li>
+  <li>Design a simple, high-contrast UI that works under stress and with riding gloves.</li>
+  <li>Ensure the alarm plays even when the phone is in silent or vibrate mode.</li>
+</ul>
+
+<h3 id="scope">2.3 Scope</h3>
+<p>
+  The current scope covers Android deployment via Flutter and native Kotlin components. The app requires the device to have an
+  accelerometer, GPS, SMS capability with runtime permissions mapped, and an internet connection (for siren audio streaming).
+</p>
+
+<!-- ===================== 3. LITERATURE SURVEY ===================== -->
+<h2 id="literature">3. Literature Survey</h2>
+<table>
+  <tr>
+    <th>Reference</th>
+    <th>Approach</th>
+    <th>Limitation Addressed by SheTorque Hub</th>
+  </tr>
+  <tr>
+    <td>Smartphone-based accident detection (IEEE, 2018)</td>
+    <td>Accelerometer threshold-based detection with GPS</td>
+    <td>SheTorque adds audible alarm + fully automated SMS dispatch via platform channels</td>
+  </tr>
+</table>
+
+<!-- ===================== 4. SYSTEM REQUIREMENTS ===================== -->
+<h2 id="system-reqs">4. System Requirements</h2>
+
+<h3>4.1 Software Requirements</h3>
+<table>
+  <tr><th>Component</th><th>Requirement</th></tr>
+  <tr><td>Framework</td><td>Flutter SDK ≥ 3.11.5, Kotlin for Android</td></tr>
+  <tr><td>Android</td><td>API Level 21+ (Android 5.0 Lollipop or higher)</td></tr>
+</table>
+
+<h3>4.2 Hardware Requirements</h3>
+<table>
+  <tr><th>Component</th><th>Requirement</th></tr>
+  <tr><td>Accelerometer</td><td>Built-in MEMS accelerometer</td></tr>
+  <tr><td>GPS</td><td>GPS/GLONASS/Galileo receiver for location services</td></tr>
+  <tr><td>SMS</td><td>Active SIM card for SMS dispatch</td></tr>
+</table>
+
+<h3>4.3 Permissions Required</h3>
+<table>
+  <tr><th>Permission</th><th>Platform</th><th>Purpose</th></tr>
+  <tr><td><code>ACCESS_FINE_LOCATION</code></td><td>Android</td><td>High-accuracy GPS coordinates</td></tr>
+  <tr><td><code>SEND_SMS</code></td><td>Android</td><td>Automated background emergency SMS dispatch</td></tr>
+  <tr><td><code>INTERNET</code></td><td>Android</td><td>Stream siren audio from CDN</td></tr>
+</table>
+
+<!-- ===================== 5. ARCHITECTURE ===================== -->
+<h2 id="architecture">5. System Architecture & Design</h2>
+
+<h3 id="high-level">5.1 High-Level Architecture</h3>
+<div class="flow-diagram">
+<pre>
+┌───────────────────────────────────────────────────────────┐
+│                     SMARTPHONE                            │
+│                                                           │
+│  ┌──────────────┐    ┌──────────────┐    ┌────────────┐  │
+│  │ Accelerometer│───▶│  Sensor      │───▶│  Crash     │  │
+│  │   (IMU)      │    │  Fusion      │    │  Detection │  │
+│  └──────────────┘    │  Engine      │    │  Algorithm │  │
+│                      └──────────────┘    └─────┬──────┘  │
+│                                                │         │
+│                                      Crash Detected?     │
+│                                        │           │     │
+│                                       YES          NO    │
+│                                        │           │     │
+│                            ┌───────────▼──┐  Continue    │
+│                            │ Alarm Siren  │  Monitoring  │
+│                            │ + Countdown  │              │
+│                            │ (90 seconds) │              │
+│                            └──────┬───────┘              │
+│                                   │                      │
+│                          User Cancels?                    │
+│                          │          │                     │
+│                         YES         NO                   │
+│                          │          │                     │
+│                     ┌────▼───┐  ┌───▼────────────┐       │
+│                     │ Reset  │  │ GPS Location   │       │
+│                     │ to     │  │ + Native Auto  │       │
+│                     │ Normal │  │ SMS via Kotlin │       │
+│                     └────────┘  └────────────────┘       │
+└───────────────────────────────────────────────────────────┘
+</pre>
+</div>
+
+<h3 id="data-flow">5.2 Data Flow Diagram</h3>
+<div class="flow-diagram">
+<pre>
+  Accelerometer Sensor Stream
+        │
+        ▼
+  Calculate: G = √(x² + y² + z²)
+        │
+        ▼
+  G > CRASH_THRESHOLD (25G)?
+    │               │
+   YES              NO ──▶ Continue loop
+    │
+    ▼
+  Countdown expires without cancel?
+    │               │
+   YES              NO ──▶ Stop siren, reset
+    │
+    ▼
+  Acquire GPS position (high accuracy)
+        │
+        ▼
+  Flutter invokes native MethodChannel("com.shetorque.hub/sms")
+        │
+        ▼
+  Kotlin uses SmsManager.sendMultipartTextMessage()
+        │
+        ▼
+  Show SOS success UI (fully automated background delivery)
+</pre>
+</div>
+
+<!-- ===================== 6. IMPLEMENTATION ===================== -->
+<h2 id="implementation">6. Implementation Details</h2>
+
+<h3 id="tech-stack">6.1 Technology Stack</h3>
+<table>
+  <tr><th>Layer</th><th>Technology</th></tr>
+  <tr><td>Framework</td><td>Flutter 3.11+</td></tr>
+  <tr><td>Sensors</td><td><code>sensors_plus</code> v6.1.1 — Accelerometer event stream</td></tr>
+  <tr><td>Location</td><td><code>geolocator</code> v10.1.0 — GPS with high accuracy</td></tr>
+  <tr><td>Communication</td><td><strong>Android Native MethodChannels &amp; Kotlin SmsManager</strong> — fully automatic headless SMS</td></tr>
+  <tr><td>Permissions</td><td><code>permission_handler</code> v11.3.1</td></tr>
+  <tr><td>Audio</td><td><code>audioplayers</code> v5.2.1 — Siren playback</td></tr>
+</table>
+
+<h3 id="sos">6.6 Fully Automatic SOS Emergency Alert System</h3>
+<p>Unlike basic systems that simply open the SMS app for the user to press 'Send', SheTorque Hub uses a direct native <strong>Platform Channel</strong> to securely hand off the payload to the Android OS. The OS then natively dispatches the SMS entirely in the background.</p>
+<ol>
+  <li><strong>GPS Acquisition:</strong> High-accuracy position via <code>Geolocator</code>.</li>
+  <li><strong>MethodChannel Invocation:</strong> Flutter calls <code>_smsChannel.invokeMethod('sendSms')</code> passing the contact and pre-composed message.</li>
+  <li><strong>Native SmsManager:</strong> Over in <code>MainActivity.kt</code>, the Android OS <code>SmsManager</code> is utilized. It correctly breaks the payload via <code>divideMessage</code> and sends it silently using <code>sendMultipartTextMessage</code>.</li>
+</ol>
+
+<h3 id="permissions">6.8 Permissions & Runtime Handling</h3>
+<p>Modern Android architectures require dynamic permissions. During `initState`, the app dynamically asks the user for:</p>
+<ul>
+  <li><code>ACCESS_FINE_LOCATION</code> (via GeoLocator plugin)</li>
+  <li><code>SEND_SMS</code> (via Permission Handler plugin)</li>
+</ul>
+<pre>
+Future&lt;void&gt; _checkPermissions() async {
+  await Geolocator.requestPermission();
+  await Permission.sms.request(); // Dynamically ask user for SMS rights
+}
+</pre>
+<p>The Android manifest structurally establishes these at the system level before compilation.</p>
+
+<!-- ===================== 7. SOURCE CODE ===================== -->
+<h2 id="source-code">7. Complete Source Code</h2>
+
+<h3>7.1 Flutter Logic (lib/main.dart)</h3>
+<pre>
+import 'dart:async';
+import 'dart:math';
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:permission_handler/permission_handler.dart';
+import 'package:sensors_plus/sensors_plus.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:audioplayers/audioplayers.dart';
+
+void main() => runApp(const SheTorqueApp());
+
+class SheTorqueApp extends StatelessWidget {
+  const SheTorqueApp({super.key});
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData.dark(),
+      home: const SensorFusionHub(),
+    );
+  }
+}
+
+class SensorFusionHub extends StatefulWidget {
+  const SensorFusionHub({super.key});
+  @override
+  _SensorFusionHubState createState() => _SensorFusionHubState();
+}
+
+class _SensorFusionHubState extends State&lt;SensorFusionHub&gt; {
+  final String emergencyContact = "+916360826795";
+  final double crashThreshold = 25.0; 
+  
+  bool isCrashDetected = false;
+  bool isSosSent = false;
+  int countdownSeconds = 90;
+  double liveGForce = 0.0;
+  
+  Timer? _displayTimer;
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  StreamSubscription? _accelerometerSubscription;
+
+  // Platform channel for native SMS sending
+  static const _smsChannel = MethodChannel('com.shetorque.hub/sms');
+
+  @override
+  void initState() {
+    super.initState();
+    _setupAudio();
+    _checkPermissions();
+    _startListening();
+  }
+
+  Future&lt;void&gt; _setupAudio() async {
+    try {
+      await _audioPlayer.setAudioContext(AudioContext(
+        android: const AudioContextAndroid(
+          usageType: AndroidUsageType.alarm,
+          contentType: AndroidContentType.sonification,
+          audioFocus: AndroidAudioFocus.gain,
+        ),
+      ));
+      await _audioPlayer.setSource(UrlSource('https://crude-silver-wzcjnmjo5u.edgeone.app/emergency_alarm_siren.mp3'));
+    } catch (e) {
+      print("Audio Setup Error: $e");
+    }
+  }
+
+  Future&lt;void&gt; _checkPermissions() async {
+    await Geolocator.requestPermission();
+    await Permission.sms.request();
+  }
+
+  void _startListening() {
+    _accelerometerSubscription = accelerometerEvents.listen((AccelerometerEvent event) {
+      double g = sqrt(event.x * event.x + event.y * event.y + event.z * event.z);
+      setState(() { liveGForce = g; });
+      if (!isCrashDetected && !isSosSent && g > crashThreshold) {
+        _triggerCrashProtocol();
+      }
+    });
+  }
+
+  void _triggerCrashProtocol() {
+    setState(() {
+      isCrashDetected = true;
+      countdownSeconds = 90;
+    });
+    _audioPlayer.setReleaseMode(ReleaseMode.loop);
+    _audioPlayer.resume(); 
+
+    _displayTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      setState(() {
+        if (countdownSeconds > 0) {
+          countdownSeconds--;
+        } else {
+          _displayTimer?.cancel();
+          _sendFinalSOS(); 
+        }
+      });
+    });
+  }
+
+  Future&lt;void&gt; _sendFinalSOS() async {
+    try {
+      Position position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+      String mapLink = "https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}";
+      String message = "EMERGENCY: SheTorque Hub detected a crash! Rider is unresponsive. Location: $mapLink";
+
+      // Auto-send native SMS
+      await _smsChannel.invokeMethod('sendSms', {
+        'phone': emergencyContact,
+        'message': message,
+      });
+
+      _onSosSent();
+    } catch (e) {
+      print("SOS Error: $e");
+    }
+  }
+
+  void _onSosSent() {
+    _audioPlayer.stop();
+    setState(() {
+      isCrashDetected = false;
+      isSosSent = true;
+    });
+  }
+
+  void _cancelSOS() {
+    _displayTimer?.cancel();
+    _audioPlayer.stop();
+    setState(() {
+      isCrashDetected = false;
+      isSosSent = false;
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    Color bgColor = Colors.black;
+    if (isSosSent) bgColor = Colors.green.shade900;
+    else if (isCrashDetected) bgColor = Colors.red.shade900;
+
+    return Scaffold(
+      backgroundColor: bgColor,
+      body: Center(
+        child: isSosSent ? _buildSuccessUI() : (isCrashDetected ? _buildCrashUI() : _buildNormalUI()),
+      ),
+    );
+  }
+
+  // UI Components omitted for brevity...
+  Widget _buildNormalUI() { return Container(); }
+  Widget _buildCrashUI() { return Container(); }
+  Widget _buildSuccessUI() { return Container(); }
+}
+</pre>
+
+<h3>7.2 Native Android Handler (MainActivity.kt)</h3>
+<pre>
+package com.example.shetorque_hub
+
+import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.engine.FlutterEngine
+import io.flutter.plugin.common.MethodChannel
+import android.telephony.SmsManager
+import android.os.Build
+
+class MainActivity : FlutterActivity() {
+    private val CHANNEL = "com.shetorque.hub/sms"
+
+    override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+        super.configureFlutterEngine(flutterEngine)
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+            .setMethodCallHandler { call, result ->
+                if (call.method == "sendSms") {
+                    val phone = call.argument&lt;String&gt;("phone")
+                    val message = call.argument&lt;String&gt;("message")
+
+                    if (phone != null && message != null) {
+                        try {
+                            val smsManager = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                                getSystemService(SmsManager::class.java)
+                            } else {
+                                @Suppress("DEPRECATION")
+                                SmsManager.getDefault()
+                            }
+
+                            val parts = smsManager.divideMessage(message)
+                            smsManager.sendMultipartTextMessage(phone, null, parts, null, null)
+
+                            result.success(true)
+                        } catch (e: Exception) {
+                            result.error("SMS_ERROR", e.message, null)
+                        }
+                    } else {
+                        result.error("INVALID_ARGS", "Phone and message are required", null)
+                    }
+                } else {
+                    result.notImplemented()
+                }
+            }
+    }
+}
+</pre>
+
+<!-- ===================== 8. TESTING ===================== -->
+<h2 id="testing">8. Testing</h2>
+<table>
+  <tr><th>Test Case</th><th>Description</th><th>Expected Result</th></tr>
+  <tr>
+    <td>Auto-Send Native SMS</td>
+    <td>Verify that after countdown, Android OS intercepts payload natively and dispatches directly.</td>
+    <td>SMS is completely headless. Receiver physically gets text.</td>
+  </tr>
+</table>
+
+<!-- ===================== 10. LIMITATIONS ===================== -->
+<h2 id="limitations">10. Limitations</h2>
+<ol>
+  <li><strong>Single-axis threshold:</strong> Relies solely on total G-force magnitude.</li>
+  <li><strong>No background execution:</strong> The app must be in the foreground to monitor the accelerometer.</li>
+</ol>
+
+<footer>
+  <p>SheTorque Hub — Project Documentation &copy; 2026 | Generated automatically</p>
+  <p><em>To save as PDF: Open this file in a browser → Press <strong>Ctrl + P</strong> → Select <strong>"Save as PDF"</strong></em></p>
+</footer>
+
+</body>
+</html>
