@@ -4,6 +4,30 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import '../models/safe_route_model.dart';
 
+// Model for Places Autocomplete suggestions
+class PlaceSuggestion {
+  final String placeId;
+  final String description;
+  final String mainText;
+  final String? secondaryText;
+
+  PlaceSuggestion({
+    required this.placeId,
+    required this.description,
+    required this.mainText,
+    this.secondaryText,
+  });
+
+  factory PlaceSuggestion.fromJson(Map<String, dynamic> json) {
+    return PlaceSuggestion(
+      placeId: json['place_id'] ?? '',
+      description: json['description'] ?? '',
+      mainText: json['structured_formatting']?['main_text'] ?? '',
+      secondaryText: json['structured_formatting']?['secondary_text'],
+    );
+  }
+}
+
 class SafeRoutingService {
   final String _googleApiKey = "AIzaSyCUHBYx2WJdKyn28chAG60d38oHkRPo7OE";
 
@@ -237,6 +261,81 @@ class SafeRoutingService {
       };
     } else {
       throw Exception('Overpass API failed');
+    }
+  }
+
+  // Fetch Places Autocomplete suggestions based on user input
+  Future<List<PlaceSuggestion>> fetchPlacesSuggestions(String input, {LatLng? bias}) async {
+    if (input.isEmpty) return [];
+
+    try {
+      final String url =
+          'https://maps.googleapis.com/maps/api/place/autocomplete/json?input=$input&key=$_googleApiKey'
+          '${bias != null ? '&location=${bias.latitude},${bias.longitude}&radius=50000' : ''}';
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        final List<dynamic> predictions = data['predictions'] ?? [];
+
+        return predictions
+            .map((p) => PlaceSuggestion.fromJson(p as Map<String, dynamic>))
+            .toList();
+      }
+      return [];
+    } catch (e) {
+      print('Places Autocomplete Error: $e');
+      return [];
+    }
+  }
+
+  // Get detailed place information including coordinates
+  Future<LatLng?> getPlaceDetails(String placeId) async {
+    try {
+      final String url =
+          'https://maps.googleapis.com/maps/api/place/details/json?place_id=$placeId&fields=geometry&key=$_googleApiKey';
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        final result = data['result'];
+
+        if (result != null) {
+          final location = result['geometry']?['location'];
+          if (location != null) {
+            return LatLng(location['lat'], location['lng']);
+          }
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Place Details Error: $e');
+      return null;
+    }
+  }
+
+  // Reverse geocode coordinates to get location name
+  Future<String?> reverseGeocodeLocation(LatLng location) async {
+    try {
+      final String url =
+          'https://maps.googleapis.com/maps/api/geocode/json?latlng=${location.latitude},${location.longitude}&key=$_googleApiKey';
+
+      final response = await http.get(Uri.parse(url));
+
+      if (response.statusCode == 200) {
+        final Map<String, dynamic> data = json.decode(response.body);
+        final List<dynamic> results = data['results'] ?? [];
+
+        if (results.isNotEmpty) {
+          return results.first['formatted_address'] ?? '';
+        }
+      }
+      return null;
+    } catch (e) {
+      print('Reverse Geocode Error: $e');
+      return null;
     }
   }
 }
