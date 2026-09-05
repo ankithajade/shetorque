@@ -14,6 +14,7 @@ import 'services/sos_notification_service.dart';
 import 'services/occlusion_detector.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/pin_checkin_screen.dart';
+import 'screens/safe_routing_screen.dart';
 import 'models/stealth_sos_state.dart';
 
 void main() async {
@@ -375,6 +376,22 @@ class _SensorFusionHubState extends State<SensorFusionHub> with SingleTickerProv
               Text("${liveGForce.toStringAsFixed(2)} G", 
                 style: const TextStyle(fontSize: 42, fontWeight: FontWeight.bold)),
             ],
+          ),
+        ),
+        const SizedBox(height: 40),
+        ElevatedButton.icon(
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(builder: (context) => const SafeRoutingScreen()),
+            );
+          },
+          icon: const Icon(Icons.map),
+          label: const Text("Open Safe Routing"),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.indigo,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
           ),
         ),
       ],
