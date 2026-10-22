@@ -25,6 +25,8 @@ import 'tabs/safe_routing_tab.dart';
 import 'tabs/diagnostics_tab.dart';
 import 'tabs/community_tab.dart';
 import 'tabs/profile_tab.dart';
+import '../../screens/safety_hub_screen.dart';
+import '../../screens/guardian_eye_screen.dart';
 import '../../models/ecu_data.dart';
 import '../../models/vehicle_health.dart';
 import '../../services/mock_ecu_service.dart';
@@ -121,7 +123,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     _setupAudio();
     _startCrashSensorListener();
     _initStealthOcclusionListener();
-    _restoreActiveSessionState();
+    // sessionActiveNotifier is hydrated in main() via hydrateNotifier();
+    // the ValueListenableBuilder in build() reacts automatically.
   }
 
   Future<void> _checkPermissions() async {
@@ -146,13 +149,18 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     } catch (_) {}
   }
 
-  Future<void> _restoreActiveSessionState() async {
-    final isActive = await SosSessionManager.isSessionActive();
-    if (isActive && mounted) {
-      setState(() {
-        _stealthSosState = StealthSosState.tracking;
-      });
-    }
+  /// Opens the PIN check-in screen. Used by the shield button when the rider
+  /// wants to confirm they are safe and resolve the active SOS session.
+  void _openPinCheckin() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => PinCheckinScreen(
+          onSafeConfirmed: () {
+            Navigator.of(ctx).pop();
+          },
+        ),
+      ),
+    );
   }
 
   /// Single, exclusive listener for Accelerometer events
@@ -255,18 +263,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
 
   Future<void> _resolveStealthSos() async {
     await HapticFeedback.heavyImpact();
-    setState(() {
-      _stealthSosState = StealthSosState.resolved;
-    });
-    await SmsService.sendSafeConfirmation();
-    LocationTracker().stopTracking();
-    await SosNotificationService().cancelNotification();
-    await SosSessionManager.endSession();
-    if (mounted) {
-      setState(() {
-        _stealthSosState = StealthSosState.idle;
-      });
-    }
+    // Open PIN check-in. PinCheckinScreen calls endSession() on correct PIN.
+    if (mounted) _openPinCheckin();
   }
 
   void _triggerCrashProtocol() {
@@ -491,6 +489,14 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
               _currentTabIndex = index;
             });
           },
+          onSafetyHubPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+                builder: (_) => const SafetyHubScreen()),
+          ),
+          onGuardianEyePressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+                builder: (_) => const GuardianEyeScreen()),
+          ),
         );
       case 1:
         return const RidesTab();
@@ -511,6 +517,14 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
           ecuData: _ecuData,
           vehicleHealth: _vehicleHealth,
           onSosPressed: _showTestEmergencyModal,
+          onSafetyHubPressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+                builder: (_) => const SafetyHubScreen()),
+          ),
+          onGuardianEyePressed: () => Navigator.of(context).push(
+            MaterialPageRoute(
+                builder: (_) => const GuardianEyeScreen()),
+          ),
         );
     }
   }
@@ -572,7 +586,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
                         backgroundColor: SheTorqueTheme.successGreen),
                     SizedBox(width: 6),
                     Text(
-                      'OBD-II LIVE',
+                      'SIMULATED ECU',
                       style: TextStyle(
                         color: SheTorqueTheme.successGreen,
                         fontSize: 11,
@@ -700,35 +714,42 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
           ),
         ),
 
-        // --- OVERLAY: Stealth SOS Pulsing Red Dot ---
-        if (_stealthSosState == StealthSosState.tracking ||
-            _stealthSosState == StealthSosState.dispatched)
-          Positioned(
-            top: 40,
-            right: 20,
-            child: FadeTransition(
-              opacity: _pulseAnimation,
-              child: Container(
-                width: 12,
-                height: 12,
-                decoration: const BoxDecoration(
-                  color: Colors.red,
-                  shape: BoxShape.circle,
+        // --- OVERLAY: Stealth SOS Pulsing Red Dot + "I Am Safe" Shield ---
+        // Driven by sessionActiveNotifier so it appears the instant the SOS fires.
+        ValueListenableBuilder<bool>(
+          valueListenable: SosSessionManager.sessionActiveNotifier,
+          builder: (ctx, isActive, child) {
+            if (!isActive) return const SizedBox.shrink();
+            return Stack(
+              children: [
+                // Pulsing red dot
+                Positioned(
+                  top: 40,
+                  right: 20,
+                  child: FadeTransition(
+                    opacity: _pulseAnimation,
+                    child: Container(
+                      width: 12,
+                      height: 12,
+                      decoration: const BoxDecoration(
+                        color: Colors.red,
+                        shape: BoxShape.circle,
+                      ),
+                    ),
+                  ),
                 ),
-              ),
-            ),
-          ),
-
-        // --- OVERLAY: Stealth SOS "I Am Safe" Button ---
-        if (_stealthSosState == StealthSosState.dispatched ||
-            _stealthSosState == StealthSosState.tracking)
-          Positioned(
-            bottom: 74,
-            left: 16,
-            child: SafeCancelButton(
-              onConfirmed: _resolveStealthSos,
-            ),
-          ),
+                // Shield button
+                Positioned(
+                  bottom: 74,
+                  left: 16,
+                  child: SafeCancelButton(
+                    onConfirmed: _resolveStealthSos,
+                  ),
+                ),
+              ],
+            );
+          },
+        ),
 
         // --- OVERLAY: Armed Buffer 5s Countdown ---
         if (_stealthSosState == StealthSosState.armed) ...[

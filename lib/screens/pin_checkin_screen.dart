@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/emergency_siren_service.dart';
+import '../services/sos_notification_service.dart';
 import '../services/sos_session_manager.dart';
 import '../services/sms_service.dart';
-
 import '../services/supabase_auth_service.dart';
 
 class PinCheckinScreen extends StatefulWidget {
@@ -56,6 +57,10 @@ class _PinCheckinScreenState extends State<PinCheckinScreen> {
   }
 
   Future<void> _confirmSafe() async {
+    // Stop siren if it was playing during crash detection
+    EmergencySirenService.instance.stopSiren();
+    // Dismiss the persistent notification
+    await SosNotificationService().cancelNotification();
     await SmsService.sendSafeConfirmation();
     await SosSessionManager.endSession();
     widget.onSafeConfirmed();

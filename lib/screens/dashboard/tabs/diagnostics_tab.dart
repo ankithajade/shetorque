@@ -192,7 +192,7 @@ class _DiagnosticsTabState extends State<DiagnosticsTab> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'OBD-II Diagnostics',
+                  'ECU Diagnostics (Simulated)',
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -201,7 +201,7 @@ class _DiagnosticsTabState extends State<DiagnosticsTab> {
                 ),
                 SizedBox(height: 2),
                 Text(
-                  'Live Telemetry & Diagnostic Health Engine',
+                  'Simulated Telemetry & Diagnostic Health Engine',
                   style:
                       TextStyle(color: SheTorqueTheme.textMuted, fontSize: 13),
                 ),
@@ -385,6 +385,32 @@ class _DiagnosticsTabState extends State<DiagnosticsTab> {
                       ),
                     ),
                   ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 12),
+
+        // ELM327 connection status row (A3)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: SheTorqueTheme.surfaceLight,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: SheTorqueTheme.border),
+          ),
+          child: const Row(
+            children: [
+              Icon(Icons.bluetooth_disabled_rounded,
+                  size: 15, color: SheTorqueTheme.textMuted),
+              SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'ELM327 adapter: not connected \u2014 using simulator',
+                  style: TextStyle(
+                      fontSize: 11.5, color: SheTorqueTheme.textMuted),
                 ),
               ),
             ],

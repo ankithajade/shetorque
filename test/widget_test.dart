@@ -272,7 +272,7 @@ void main() {
       expect(find.text('91.2°C'), findsOneWidget);
       expect(find.text('12.75V'), findsOneWidget);
       expect(find.text('4350'), findsOneWidget);
-      expect(find.text('OBD-II STREAMING'), findsOneWidget);
+      expect(find.text('SIMULATED ECU'), findsOneWidget);
     });
 
     testWidgets('DiagnosticsTab displays live parameter breakdown and 100% health', (WidgetTester tester) async {
@@ -289,7 +289,7 @@ void main() {
         ),
       );
 
-      expect(find.text('OBD-II Diagnostics'), findsOneWidget);
+      expect(find.text('ECU Diagnostics (Simulated)'), findsOneWidget);
       expect(find.text('100%'), findsOneWidget);
       expect(find.text('Optimal Condition'), findsOneWidget);
       expect(find.text('4350 RPM'), findsOneWidget);

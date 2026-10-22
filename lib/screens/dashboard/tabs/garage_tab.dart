@@ -4,6 +4,7 @@ import '../../../models/rider_profile.dart';
 import '../../../models/bike_info.dart';
 import '../../../models/ecu_data.dart';
 import '../../../models/vehicle_health.dart';
+import '../../../services/bike_telemetry_calculator.dart';
 import '../../../widgets/diagnostic_card.dart';
 
 /// Garage tab displaying rider greeting, motorcycle overview, live streamed telemetry cards,
@@ -15,6 +16,8 @@ class GarageTab extends StatelessWidget {
   final VehicleHealth vehicleHealth;
   final VoidCallback onSosPressed;
   final void Function(int tabIndex)? onNavigateTab;
+  final VoidCallback? onSafetyHubPressed;
+  final VoidCallback? onGuardianEyePressed;
 
   const GarageTab({
     super.key,
@@ -24,6 +27,8 @@ class GarageTab extends StatelessWidget {
     required this.vehicleHealth,
     required this.onSosPressed,
     this.onNavigateTab,
+    this.onSafetyHubPressed,
+    this.onGuardianEyePressed,
   });
 
   Widget _buildQuickStat({
@@ -88,6 +93,70 @@ class GarageTab extends StatelessWidget {
                 color: SheTorqueTheme.textWhite,
               ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeatureCard({
+    required IconData icon,
+    required String label,
+    required String sublabel,
+    required Color color,
+    VoidCallback? onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 14),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              color.withValues(alpha: 0.18),
+              color.withValues(alpha: 0.06),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: color.withValues(alpha: 0.6)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: color.withValues(alpha: 0.15),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: color, size: 20),
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.bold,
+                      color: color,
+                    ),
+                  ),
+                  Text(
+                    sublabel,
+                    style: const TextStyle(
+                        fontSize: 10.5,
+                        color: SheTorqueTheme.textMuted),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.arrow_forward_ios_rounded,
+                size: 12, color: color.withValues(alpha: 0.6)),
           ],
         ),
       ),
@@ -410,6 +479,33 @@ class GarageTab extends StatelessWidget {
           ),
         ),
 
+        const SizedBox(height: 12),
+
+        // ── Safety Feature Navigation Cards ──────────────────────────────
+        Row(
+          children: [
+            Expanded(
+              child: _buildFeatureCard(
+                icon: Icons.security_rounded,
+                label: 'Safety Hub',
+                sublabel: 'Crash & Silent SOS',
+                color: SheTorqueTheme.dangerRed,
+                onTap: onSafetyHubPressed,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildFeatureCard(
+                icon: Icons.remove_red_eye_rounded,
+                label: 'Guardian Eye',
+                sublabel: 'Vehicle Tracking',
+                color: SheTorqueTheme.warningAmber,
+                onTap: onGuardianEyePressed,
+              ),
+            ),
+          ],
+        ),
+
         const SizedBox(height: 22),
 
         // Section: Vehicle Diagnostics (Live Telemetry metrics)
@@ -427,26 +523,68 @@ class GarageTab extends StatelessWidget {
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
               decoration: BoxDecoration(
-                color: SheTorqueTheme.primaryCyan.withValues(alpha: 0.12),
+                color: SheTorqueTheme.warningAmber.withValues(alpha: 0.12),
                 borderRadius: BorderRadius.circular(12),
               ),
               child: const Row(
                 children: [
-                  Icon(Icons.sensors_rounded,
-                      size: 13, color: SheTorqueTheme.primaryCyan),
+                  Icon(Icons.science_rounded,
+                      size: 13, color: SheTorqueTheme.warningAmber),
                   SizedBox(width: 4),
                   Text(
-                    'OBD-II STREAMING',
+                    'SIMULATED ECU',
                     style: TextStyle(
                       fontSize: 10.5,
                       fontWeight: FontWeight.bold,
-                      color: SheTorqueTheme.primaryCyan,
+                      color: SheTorqueTheme.warningAmber,
                     ),
                   ),
                 ],
               ),
             ),
           ],
+        ),
+
+        const SizedBox(height: 10),
+
+        // ELM327 connection status row (A3)
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: SheTorqueTheme.surfaceLight,
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: SheTorqueTheme.border),
+          ),
+          child: Row(
+            children: [
+              const Icon(Icons.bluetooth_disabled_rounded,
+                  size: 15, color: SheTorqueTheme.textMuted),
+              const SizedBox(width: 8),
+              const Expanded(
+                child: Text(
+                  'ELM327 adapter: not connected \u2014 using simulator',
+                  style: TextStyle(
+                      fontSize: 11.5, color: SheTorqueTheme.textMuted),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: SheTorqueTheme.warningAmber.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text(
+                  'SIMULATED',
+                  style: TextStyle(
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    color: SheTorqueTheme.warningAmber,
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
 
         const SizedBox(height: 14),
@@ -540,6 +678,11 @@ class GarageTab extends StatelessWidget {
           ],
         ),
 
+        const SizedBox(height: 16),
+
+        // ── Telemetry Intelligence (fuel range, alerts, service) ──
+        _buildTelemetryIntelligenceSection(bike),
+
         const SizedBox(height: 24),
 
         // Quick Actions
@@ -595,6 +738,158 @@ class GarageTab extends StatelessWidget {
 
         const SizedBox(height: 24),
       ],
+    );
+  }
+
+  /// Builds the BikeTelemetryCalculator-driven intelligence cards.
+  Widget _buildTelemetryIntelligenceSection(BikeInfo bikeInfo) {
+    final rangeKm = BikeTelemetryCalculator.calculateRemainingRangeKm(
+      fuelCapacityL: bikeInfo.fuelCapacityL,
+      avgMileageKmpl: bikeInfo.avgMileageKmpl,
+      fuelLevelPercent: ecuData.fuelLevelPercent,
+    );
+    final alertLevel = BikeTelemetryCalculator.getFuelAlertLevel(
+      ecuData.fuelLevelPercent,
+    );
+    final serviceDueKm = BikeTelemetryCalculator.calculateServiceDueInKm(
+      currentOdometerKm: bikeInfo.odometerKm,
+      lastServiceKm: bikeInfo.lastServiceKm,
+    );
+    final serviceOverdue = BikeTelemetryCalculator.isServiceOverdue(
+      currentOdometerKm: bikeInfo.odometerKm,
+      lastServiceKm: bikeInfo.lastServiceKm,
+    );
+    final serviceText = BikeTelemetryCalculator.getServiceStatusText(
+      currentOdometerKm: bikeInfo.odometerKm,
+      lastServiceKm: bikeInfo.lastServiceKm,
+    );
+
+    final Color alertColor = alertLevel == FuelAlertLevel.critical
+        ? SheTorqueTheme.dangerRed
+        : alertLevel == FuelAlertLevel.advisory
+            ? SheTorqueTheme.warningAmber
+            : SheTorqueTheme.successGreen;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Ride Intelligence',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: SheTorqueTheme.textWhite,
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Fuel Range Estimate
+        _buildIntelCard(
+          icon: Icons.local_gas_station_rounded,
+          iconColor: SheTorqueTheme.primaryCyan,
+          title: 'Estimated Fuel Range',
+          value: '${rangeKm.toStringAsFixed(0)} km',
+          subtitle:
+              'Based on ${bikeInfo.fuelCapacityL.toStringAsFixed(0)}L tank @ ${bikeInfo.avgMileageKmpl.toStringAsFixed(0)} km/L avg',
+        ),
+        const SizedBox(height: 10),
+
+        // Fuel Alert (50% / 75% consumed)
+        if (alertLevel != FuelAlertLevel.none)
+          _buildIntelCard(
+            icon: alertLevel == FuelAlertLevel.critical
+                ? Icons.warning_amber_rounded
+                : Icons.info_outline_rounded,
+            iconColor: alertColor,
+            title: alertLevel == FuelAlertLevel.critical
+                ? 'CRITICAL FUEL ALERT'
+                : 'Fuel Advisory',
+            value: alertLevel == FuelAlertLevel.critical
+                ? '≥25% tank remaining'
+                : '≥50% tank remaining',
+            subtitle:
+                '${BikeTelemetryCalculator.calculateFuelConsumedPercent(ecuData.fuelLevelPercent).toStringAsFixed(0)}% consumed — consider refuelling soon',
+            borderColor: alertColor,
+          ),
+        if (alertLevel != FuelAlertLevel.none) const SizedBox(height: 10),
+
+        // Service interval card
+        _buildIntelCard(
+          icon: serviceOverdue
+              ? Icons.build_circle_rounded
+              : Icons.build_outlined,
+          iconColor: serviceOverdue
+              ? SheTorqueTheme.dangerRed
+              : SheTorqueTheme.primaryCyan,
+          title: 'Service Interval (3,000 km)',
+          value: serviceOverdue
+              ? 'OVERDUE'
+              : '${serviceDueKm.toStringAsFixed(0)} km',
+          subtitle: serviceText,
+          borderColor: serviceOverdue
+              ? SheTorqueTheme.dangerRed.withValues(alpha: 0.6)
+              : null,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildIntelCard({
+    required IconData icon,
+    required Color iconColor,
+    required String title,
+    required String value,
+    required String subtitle,
+    Color? borderColor,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: SheTorqueTheme.surface,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(
+          color: borderColor ?? SheTorqueTheme.border,
+        ),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(9),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.12),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(icon, color: iconColor, size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  title,
+                  style: const TextStyle(
+                      fontSize: 11.5, color: SheTorqueTheme.textMuted),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: iconColor,
+                  ),
+                ),
+                Text(
+                  subtitle,
+                  style: const TextStyle(
+                      fontSize: 11, color: SheTorqueTheme.textMuted),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

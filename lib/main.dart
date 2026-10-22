@@ -27,6 +27,7 @@ void main() async {
       debugPrint('Supabase.initialize error: $e');
     }
     await SosNotificationService().init();
+    await SosSessionManager.hydrateNotifier();
   }
   runApp(const SheTorqueApp());
 }

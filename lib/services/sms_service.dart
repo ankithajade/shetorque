@@ -326,4 +326,30 @@ class SmsService {
   static String _formatTime(DateTime dt) {
     return "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
   }
+
+  /// Sends a real SMS to the emergency contact alerting them of a persistent
+  /// following vehicle. Reads contact from local cache — no network dependency.
+  static Future<void> sendGuardianFollowerAlert({
+    required String trackId,
+    required int followedSeconds,
+  }) async {
+    final phone = await resolveEmergencyContact();
+    final riderName = (await resolveRiderProfileString()) ?? 'Rider';
+    if (phone == null || phone.isEmpty) return;
+
+    final now = DateTime.now();
+    final time = _formatTime(now);
+    final body =
+        'GUARDIAN ALERT: $riderName — Vehicle $trackId has been following '
+        'for ${followedSeconds}s. Sent at $time via SheTorque Guardian Eye.';
+
+    try {
+      await _smsChannel.invokeMethod<void>('sendSms', {
+        'phoneNumber': phone,
+        'message': body,
+      });
+    } catch (e) {
+      debugPrint('sendGuardianFollowerAlert error: $e');
+    }
+  }
 }
