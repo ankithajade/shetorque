@@ -17,6 +17,8 @@ import 'package:shetorque_hub/services/crime_data_service.dart';
 import 'package:shetorque_hub/services/safe_routing_service.dart';
 import 'package:shetorque_hub/screens/dashboard/tabs/garage_tab.dart';
 import 'package:shetorque_hub/screens/dashboard/tabs/diagnostics_tab.dart';
+import 'package:shetorque_hub/config/app_config.dart';
+import 'package:shetorque_hub/screens/config_error_screen.dart';
 import 'package:shetorque_hub/main.dart';
 
 void main() {
@@ -436,12 +438,25 @@ void main() {
       expect(SmsService.emergencyContact, '+916360826795');
     });
 
-    testWidgets('SheTorqueApp builds with dark theme and initial route',
+    test('AppConfig exposes environment variables with no hardcoded fallbacks', () {
+      expect(AppConfig.supabaseUrl, isEmpty);
+      expect(AppConfig.supabaseAnonKey, isEmpty);
+      expect(AppConfig.googleMapsApiKey, isEmpty);
+      expect(AppConfig.isConfigured, isFalse);
+      expect(AppConfig.missingVariables, contains('SUPABASE_URL'));
+      expect(AppConfig.missingVariables, contains('SUPABASE_ANON_KEY'));
+    });
+
+    testWidgets('SheTorqueApp builds and renders ConfigErrorScreen when unconfigured',
         (WidgetTester tester) async {
       await tester.pumpWidget(const SheTorqueApp());
       await tester.pumpAndSettle();
 
       expect(find.byType(MaterialApp), findsOneWidget);
+      expect(find.byType(ConfigErrorScreen), findsOneWidget);
+      expect(find.text('CONFIGURATION REQUIRED'), findsOneWidget);
+      expect(find.text('SUPABASE_URL'), findsOneWidget);
+      expect(find.text('SUPABASE_ANON_KEY'), findsOneWidget);
     });
   });
 }

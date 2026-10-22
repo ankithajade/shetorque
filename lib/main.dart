@@ -4,6 +4,8 @@ import 'theme/she_torque_theme.dart';
 import 'services/local_auth_service.dart';
 import 'services/sos_session_manager.dart';
 import 'services/sos_notification_service.dart';
+import 'config/app_config.dart';
+import 'screens/config_error_screen.dart';
 import 'screens/auth/login_screen.dart';
 import 'screens/dashboard/main_dashboard_screen.dart';
 import 'screens/pin_checkin_screen.dart';
@@ -12,8 +14,10 @@ import 'screens/sensor_fusion_hub_screen.dart';
 /// Single, unified application entrypoint for SheTorque Hub.
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await SosNotificationService().init();
-  await LocalAuthService().ensureDemoAccountSeeded();
+  if (AppConfig.isConfigured) {
+    await SosNotificationService().init();
+    await LocalAuthService().ensureDemoAccountSeeded();
+  }
   runApp(const SheTorqueApp());
 }
 
@@ -30,7 +34,9 @@ class _SheTorqueAppState extends State<SheTorqueApp> {
   @override
   void initState() {
     super.initState();
-    _determineInitialScreen();
+    if (AppConfig.isConfigured) {
+      _determineInitialScreen();
+    }
   }
 
   Future<void> _determineInitialScreen() async {
@@ -68,15 +74,17 @@ class _SheTorqueAppState extends State<SheTorqueApp> {
       title: 'SheTorque Hub',
       debugShowCheckedModeBanner: false,
       theme: SheTorqueTheme.darkTheme,
-      home: _initialScreen ??
-          const Scaffold(
-            backgroundColor: SheTorqueTheme.background,
-            body: Center(
-              child: CircularProgressIndicator(
-                color: SheTorqueTheme.primaryCyan,
-              ),
-            ),
-          ),
+      home: !AppConfig.isConfigured
+          ? const ConfigErrorScreen()
+          : (_initialScreen ??
+              const Scaffold(
+                backgroundColor: SheTorqueTheme.background,
+                body: Center(
+                  child: CircularProgressIndicator(
+                    color: SheTorqueTheme.primaryCyan,
+                  ),
+                ),
+              )),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/dashboard': (context) => const MainDashboardScreen(),

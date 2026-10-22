@@ -141,8 +141,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
           audioFocus: AndroidAudioFocus.gain,
         ),
       ));
-      await _audioPlayer.setSource(UrlSource(
-          'https://crude-silver-wzcjnmjo5u.edgeone.app/emergency_alarm_siren.mp3'));
+      await _audioPlayer.setSource(
+          AssetSource('audio/emergency_alarm_siren.mp3'));
     } catch (_) {}
   }
 

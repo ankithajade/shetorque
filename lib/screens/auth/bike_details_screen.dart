@@ -242,7 +242,7 @@ class _BikeDetailsScreenState extends State<BikeDetailsScreen> {
 
             // Brand Dropdown
             DropdownButtonFormField<String>(
-              value: _selectedBrand,
+              initialValue: _selectedBrand,
               decoration: const InputDecoration(
                 labelText: 'Motorcycle Brand / Make',
                 prefixIcon: Icon(Icons.directions_bike_rounded),
@@ -287,7 +287,7 @@ class _BikeDetailsScreenState extends State<BikeDetailsScreen> {
               children: [
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _selectedYear,
+                    initialValue: _selectedYear,
                     decoration: const InputDecoration(
                       labelText: 'Model Year',
                       prefixIcon: Icon(Icons.calendar_today_rounded),
@@ -304,7 +304,7 @@ class _BikeDetailsScreenState extends State<BikeDetailsScreen> {
                 const SizedBox(width: 12),
                 Expanded(
                   child: DropdownButtonFormField<String>(
-                    value: _selectedFuelType,
+                    initialValue: _selectedFuelType,
                     decoration: const InputDecoration(
                       labelText: 'Powertrain',
                       prefixIcon: Icon(Icons.local_gas_station_rounded),

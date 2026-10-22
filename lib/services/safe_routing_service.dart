@@ -4,6 +4,7 @@ import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 
+import '../config/app_config.dart';
 import '../models/safe_route_model.dart';
 import 'crime_data_service.dart';
 
@@ -27,18 +28,11 @@ class SafeRoutingService {
   final http.Client _client;
   final CrimeDataService _crimeDataService;
 
-  // Fallback demo key for testing when compile-time environment variable is not passed
-  static const String _defaultGoogleApiKey =
-      String.fromEnvironment('GOOGLE_MAPS_API_KEY',
-          defaultValue: 'AIzaSyCUHBYx2WJdKyn28chAG60d38oHkRPo7OE');
-
   SafeRoutingService({
     String? apiKey,
     http.Client? client,
     CrimeDataService? crimeDataService,
-  })  : apiKey = apiKey ??
-            const String.fromEnvironment('GOOGLE_MAPS_API_KEY',
-                defaultValue: _defaultGoogleApiKey),
+  })  : apiKey = apiKey ?? AppConfig.googleMapsApiKey,
         _client = client ?? http.Client(),
         _crimeDataService = crimeDataService ?? CrimeDataService();
 

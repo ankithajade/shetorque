@@ -38,7 +38,6 @@ dependencies:
   cupertino_icons: ^1.0.8
   flutter_local_notifications: ^17.0.0
   shared_preferences: ^2.2.0
-  light: ^5.0.0
   proximity_sensor: ^1.3.10
   crypto: ^3.0.3
   google_maps_flutter: ^2.18.0
@@ -69,6 +68,9 @@ flutter:
   # included with your application, so that you can use the icons in
   # the material Icons class.
   uses-material-design: true
+
+  assets:
+    - assets/audio/emergency_alarm_siren.mp3
 
   # To add assets to your application, add an assets section, like this:
   # assets:

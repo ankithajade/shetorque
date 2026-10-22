@@ -19,7 +19,7 @@ class OcclusionDetector {
         _onProximityReading(event);
       },
       onError: (error) {
-        print("Error from proximity sensor: \$error");
+        debugPrint("Error from proximity sensor: $error");
       }
     );
   }
