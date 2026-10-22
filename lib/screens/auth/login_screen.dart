@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../theme/she_torque_theme.dart';
-import '../../services/local_auth_service.dart';
+import '../../services/supabase_auth_service.dart';
 import '../dashboard/main_dashboard_screen.dart';
 import 'signup_screen.dart';
 
@@ -13,19 +13,13 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final _authService = LocalAuthService();
+  final _authService = SupabaseAuthService.instance;
   final _emailController =
-      TextEditingController(text: LocalAuthService.demoEmail);
+      TextEditingController(text: SupabaseAuthService.demoEmail);
   final _passwordController =
-      TextEditingController(text: LocalAuthService.demoPassword);
+      TextEditingController(text: SupabaseAuthService.demoPassword);
   bool _obscurePassword = true;
   bool _isLoading = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _authService.ensureDemoAccountSeeded();
-  }
 
   @override
   void dispose() {
@@ -69,8 +63,8 @@ class _LoginScreenState extends State<LoginScreen> {
 
   void _fillDemoCredentials() {
     setState(() {
-      _emailController.text = LocalAuthService.demoEmail;
-      _passwordController.text = LocalAuthService.demoPassword;
+      _emailController.text = SupabaseAuthService.demoEmail;
+      _passwordController.text = SupabaseAuthService.demoPassword;
     });
     _onLoginPressed();
   }

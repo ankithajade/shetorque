@@ -1,38 +1,71 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
-import 'sos_session_manager.dart';
-import 'local_auth_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
+import 'sos_session_manager.dart';
+import 'supabase_auth_service.dart';
+import '../repositories/sos_events_repository.dart';
+
+/// Service responsible for dispatching autonomous emergency SMS alerts.
+///
+/// Guaranteed zero network dependency during an active emergency by strictly
+/// reading the cached recipient phone from [SharedPreferences].
 class SmsService {
   static const _smsChannel = MethodChannel('com.shetorque.hub/sms');
-  static const String emergencyContact = "+916360826795"; // Default fallback contact
+  static final SosEventsRepository _sosRepo = SosEventsRepository();
 
-  static Future<String> _resolveEmergencyContact() async {
+  /// Resolves the emergency contact phone number strictly from local SharedPreferences cache.
+  /// NEVER makes any network calls. Returns null if no contact is configured.
+  static Future<String?> resolveEmergencyContact() async {
     try {
-      final profile = await LocalAuthService().getRiderProfile();
-      final phone = profile.emergencyContactPhone.trim();
-      if (phone.isNotEmpty) return phone;
-    } catch (_) {}
-    return emergencyContact;
+      final prefs = await SharedPreferences.getInstance();
+      final contact =
+          prefs.getString(SupabaseAuthService.kCachedEmergencyContact)?.trim();
+      if (contact != null && contact.isNotEmpty) return contact;
+    } catch (e) {
+      debugPrint('Error reading cached emergency contact: $e');
+    }
+    return null;
   }
 
   // Used by CRASH SOS
-  static Future<void> sendCrashAlert(Position position) async {
-    final contact = await _resolveEmergencyContact();
+  static Future<bool> sendCrashAlert(Position position) async {
+    final contact = await resolveEmergencyContact();
+    if (contact == null || contact.isEmpty) {
+      debugPrint(
+          'SmsService: Cannot send crash alert. No emergency contact configured in local cache.');
+      // Best-effort database log even if SMS cannot be sent
+      _logSosBestEffort('crash', position.latitude, position.longitude);
+      return false;
+    }
+
     String mapLink =
         "https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}";
     String message =
         "EMERGENCY: SheTorque Hub detected a crash! Rider is unresponsive. Location: $mapLink";
 
+    // 1. Dispatch SMS immediately via native Android channel (critical priority)
     await _smsChannel.invokeMethod('sendSms', {
       'phone': contact,
       'message': message,
     });
+
+    // 2. Best-effort logging to Supabase in background (never blocks SMS)
+    _logSosBestEffort('crash', position.latitude, position.longitude);
+    return true;
   }
 
   // Used by SILENT SOS — SMS #1
-  static Future<void> sendStealthAlert(Position position) async {
-    final contact = await _resolveEmergencyContact();
+  static Future<bool> sendStealthAlert(Position position) async {
+    final contact = await resolveEmergencyContact();
+    if (contact == null || contact.isEmpty) {
+      debugPrint(
+          'SmsService: Cannot send stealth alert. No emergency contact configured in local cache.');
+      _logSosBestEffort('silent', position.latitude, position.longitude);
+      return false;
+    }
+
     String name = await SosSessionManager.getRiderName() ?? "the rider";
     String mapLink =
         "https://maps.google.com/?q=${position.latitude},${position.longitude}";
@@ -50,11 +83,17 @@ class SmsService {
       'phone': contact,
       'message': message,
     });
+
+    _logSosBestEffort('silent', position.latitude, position.longitude);
+    return true;
   }
 
   // Used by SILENT SOS — update SMS
-  static Future<void> sendLocationUpdate(Position position, int updateCount) async {
-    final contact = await _resolveEmergencyContact();
+  static Future<bool> sendLocationUpdate(
+      Position position, int updateCount) async {
+    final contact = await resolveEmergencyContact();
+    if (contact == null || contact.isEmpty) return false;
+
     String name = await SosSessionManager.getRiderName() ?? "the rider";
     String mapLink =
         "https://maps.google.com/?q=${position.latitude},${position.longitude}";
@@ -70,11 +109,14 @@ class SmsService {
       'phone': contact,
       'message': message,
     });
+    return true;
   }
 
   // Used by SILENT SOS — resolution
-  static Future<void> sendSafeConfirmation() async {
-    final contact = await _resolveEmergencyContact();
+  static Future<bool> sendSafeConfirmation() async {
+    final contact = await resolveEmergencyContact();
+    if (contact == null || contact.isEmpty) return false;
+
     String name = await SosSessionManager.getRiderName() ?? "the rider";
     String time = _formatTime(DateTime.now());
 
@@ -87,6 +129,15 @@ class SmsService {
       'phone': contact,
       'message': message,
     });
+    return true;
+  }
+
+  static void _logSosBestEffort(String type, double lat, double lng) {
+    try {
+      _sosRepo
+          .logSosEvent(type: type, lat: lat, lng: lng)
+          .catchError((_) => null);
+    } catch (_) {}
   }
 
   static String _formatTime(DateTime dt) {

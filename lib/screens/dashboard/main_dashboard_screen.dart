@@ -11,7 +11,7 @@ import '../../theme/she_torque_theme.dart';
 import '../../models/rider_profile.dart';
 import '../../models/bike_info.dart';
 import '../../models/stealth_sos_state.dart';
-import '../../services/local_auth_service.dart';
+import '../../services/supabase_auth_service.dart';
 import '../../services/sms_service.dart';
 import '../../services/location_tracker.dart';
 import '../../services/sos_notification_service.dart';
@@ -103,8 +103,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
   }
 
   Future<void> _loadUserProfiles() async {
-    final rider = await LocalAuthService().getRiderProfile();
-    final bike = await LocalAuthService().getVehicleProfile();
+    final rider = await SupabaseAuthService.instance.getRiderProfile();
+    final bike = await SupabaseAuthService.instance.getVehicleProfile();
     if (mounted) {
       setState(() {
         _rider = rider;
@@ -473,6 +473,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
         rider: _rider,
         bike: _bike,
         onTestSosPressed: _showTestEmergencyModal,
+        onProfileUpdated: _loadUserProfiles,
       );
     }
 
@@ -596,7 +597,50 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
               ),
             ],
           ),
-          body: _buildCurrentTab(),
+          body: Column(
+            children: [
+              if (!_showProfile &&
+                  _rider.emergencyContactPhone.trim().isEmpty)
+                Material(
+                  color: SheTorqueTheme.dangerRed.withValues(alpha: 0.15),
+                  child: InkWell(
+                    onTap: () {
+                      setState(() => _showProfile = true);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      decoration: const BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                              color: SheTorqueTheme.dangerRed, width: 1),
+                        ),
+                      ),
+                      child: const Row(
+                        children: [
+                          Icon(Icons.warning_amber_rounded,
+                              color: SheTorqueTheme.dangerRed, size: 20),
+                          SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'SAFETY ALERT: Emergency contact missing. Tap to configure.',
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          Icon(Icons.chevron_right,
+                              color: Colors.white70, size: 18),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              Expanded(child: _buildCurrentTab()),
+            ],
+          ),
           bottomNavigationBar: Container(
             decoration: const BoxDecoration(
               color: SheTorqueTheme.surface,

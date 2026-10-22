@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 
+import 'package:supabase_flutter/supabase_flutter.dart';
+
 import 'theme/she_torque_theme.dart';
-import 'services/local_auth_service.dart';
+import 'services/supabase_auth_service.dart';
 import 'services/sos_session_manager.dart';
 import 'services/sos_notification_service.dart';
 import 'config/app_config.dart';
@@ -15,8 +17,16 @@ import 'screens/sensor_fusion_hub_screen.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   if (AppConfig.isConfigured) {
+    try {
+      await Supabase.initialize(
+        url: AppConfig.supabaseUrl,
+        // ignore: deprecated_member_use
+        anonKey: AppConfig.supabaseAnonKey,
+      );
+    } catch (e) {
+      debugPrint('Supabase.initialize error: $e');
+    }
     await SosNotificationService().init();
-    await LocalAuthService().ensureDemoAccountSeeded();
   }
   runApp(const SheTorqueApp());
 }
@@ -58,8 +68,8 @@ class _SheTorqueAppState extends State<SheTorqueApp> {
       return;
     }
 
-    // 2. Check local authentication state
-    final bool loggedIn = await LocalAuthService().isLoggedIn();
+    // 2. Check Supabase authentication state
+    final bool loggedIn = await SupabaseAuthService.instance.isLoggedIn();
     if (mounted) {
       setState(() {
         _initialScreen =

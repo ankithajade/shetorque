@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../theme/she_torque_theme.dart';
 import '../../models/rider_profile.dart';
 import '../../models/bike_info.dart';
-import '../../services/local_auth_service.dart';
+import '../../services/supabase_auth_service.dart';
 import '../../services/sos_session_manager.dart';
 import '../dashboard/main_dashboard_screen.dart';
 
@@ -77,9 +77,12 @@ class _BikeDetailsScreenState extends State<BikeDetailsScreen> {
       nextService: 'In 180 km',
     );
 
-    // Register user account with LocalAuthService
-    final authResult = await LocalAuthService()
-        .signUp(widget.rider.email, widget.password);
+    // Register user account with SupabaseAuthService passing full_name
+    final authResult = await SupabaseAuthService.instance.signUp(
+      widget.rider.email,
+      widget.password,
+      fullName: widget.rider.name,
+    );
 
     if (!authResult.success) {
       if (mounted) {
@@ -94,9 +97,13 @@ class _BikeDetailsScreenState extends State<BikeDetailsScreen> {
       return;
     }
 
-    // Persist rider and vehicle profiles
-    await LocalAuthService().saveRiderProfile(widget.rider);
-    await LocalAuthService().saveVehicleProfile(bike);
+    // Persist rider and vehicle profiles to Supabase and local cache
+    try {
+      await SupabaseAuthService.instance.saveRiderProfile(widget.rider);
+      await SupabaseAuthService.instance.saveVehicleProfile(bike);
+    } catch (e) {
+      debugPrint('Error saving rider/bike profile: $e');
+    }
     await SosSessionManager.setRiderName(widget.rider.name);
     await SosSessionManager.markOnboardingComplete();
 
@@ -175,11 +182,9 @@ class _BikeDetailsScreenState extends State<BikeDetailsScreen> {
             // Progress Header
             Row(
               children: [
-                _buildIndicator('1', 'Personal', true),
+                _buildIndicator('1', 'Rider Details', true),
                 _buildDivider(),
-                _buildIndicator('2', 'Verify', true),
-                _buildDivider(),
-                _buildIndicator('3', 'Bike', true),
+                _buildIndicator('2', 'Bike Details', true),
               ],
             ),
             const SizedBox(height: 24),

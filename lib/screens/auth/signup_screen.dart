@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../theme/she_torque_theme.dart';
 import '../../models/rider_profile.dart';
-import 'otp_verification_screen.dart';
+import 'bike_details_screen.dart';
 
 /// Rider registration screen capturing profile, emergency contact,
 /// and medical details.
@@ -52,6 +52,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   void _onContinue() {
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter your full name.')),
+      );
+      return;
+    }
     if (_emailController.text.trim().isEmpty ||
         !_emailController.text.contains('@')) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -79,7 +85,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => OtpVerificationScreen(
+        builder: (_) => BikeDetailsScreen(
           rider: newRider,
           password: _passwordController.text,
         ),
@@ -175,11 +181,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
               // Progress Indicator
               Row(
                 children: [
-                  _buildStepIndicator('1', 'Personal', true),
+                  _buildStepIndicator('1', 'Rider Details', true),
                   _buildStepDivider(),
-                  _buildStepIndicator('2', 'Verify', false),
-                  _buildStepDivider(),
-                  _buildStepIndicator('3', 'Bike', false),
+                  _buildStepIndicator('2', 'Bike Details', false),
                 ],
               ),
               const SizedBox(height: 24),

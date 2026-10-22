@@ -3,6 +3,8 @@ import 'package:url_launcher/url_launcher.dart';
 import '../services/sos_session_manager.dart';
 import '../services/sms_service.dart';
 
+import '../services/supabase_auth_service.dart';
+
 class PinCheckinScreen extends StatefulWidget {
   final VoidCallback onSafeConfirmed;
   const PinCheckinScreen({super.key, required this.onSafeConfirmed});
@@ -15,31 +17,27 @@ class _PinCheckinScreenState extends State<PinCheckinScreen> {
   final _pinController = TextEditingController();
   int _attempts = 0;
   bool _isLocked = false;
-  String? _correctPin;
-
-  @override
-  void initState() {
-    super.initState();
-    _loadPin();
-  }
-
-  Future<void> _loadPin() async {
-    _correctPin = await SosSessionManager.getSafetyPin();
-  }
+  bool _isVerifying = false;
 
   Future<void> _verifyPin() async {
-    if (_isLocked) return;
+    if (_isLocked || _isVerifying) return;
 
-    String entered = _pinController.text.trim();
-    if (_correctPin == null) {
-      if (entered.length == 4) {
-         _confirmSafe();
-      }
+    final String entered = _pinController.text.trim();
+    if (entered.length < 4) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a 4-digit PIN.')),
+      );
       return;
     }
 
-    if (entered == _correctPin) {
-      _confirmSafe();
+    setState(() => _isVerifying = true);
+    final isValid = await SupabaseAuthService.instance.verifySafetyPin(entered);
+
+    if (!mounted) return;
+    setState(() => _isVerifying = false);
+
+    if (isValid) {
+      await _confirmSafe();
     } else {
       setState(() {
         _attempts++;
@@ -48,7 +46,11 @@ class _PinCheckinScreenState extends State<PinCheckinScreen> {
         }
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Incorrect PIN')),
+        SnackBar(
+          content: Text(_isLocked
+              ? 'Account locked after 3 failed PIN attempts.'
+              : 'Incorrect PIN (${3 - _attempts} attempts remaining)'),
+        ),
       );
     }
   }
@@ -60,9 +62,18 @@ class _PinCheckinScreenState extends State<PinCheckinScreen> {
   }
 
   Future<void> _callEmergencyContact() async {
-    final Uri url = Uri.parse('tel:${SmsService.emergencyContact}');
-    if (await canLaunchUrl(url)) {
-      await launchUrl(url);
+    final contact = await SmsService.resolveEmergencyContact();
+    if (contact != null && contact.isNotEmpty) {
+      final Uri url = Uri.parse('tel:$contact');
+      if (await canLaunchUrl(url)) {
+        await launchUrl(url);
+      }
+    } else {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('No emergency contact configured.')),
+        );
+      }
     }
   }
 

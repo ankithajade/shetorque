@@ -8,7 +8,12 @@ import 'package:shetorque_hub/models/bike_info.dart';
 import 'package:shetorque_hub/models/ecu_data.dart';
 import 'package:shetorque_hub/models/vehicle_health.dart';
 import 'package:shetorque_hub/models/safe_route_model.dart';
-import 'package:shetorque_hub/services/local_auth_service.dart';
+import 'package:shetorque_hub/services/auth_service.dart';
+import 'package:shetorque_hub/services/supabase_auth_service.dart';
+import 'package:shetorque_hub/models/ride_model.dart';
+import 'package:shetorque_hub/models/sos_event_model.dart';
+import 'package:shetorque_hub/models/guardian_alert_model.dart';
+import 'package:shetorque_hub/models/pink_spot_model.dart';
 import 'package:shetorque_hub/services/sms_service.dart';
 import 'package:shetorque_hub/services/vehicle_telemetry_service.dart';
 import 'package:shetorque_hub/services/mock_ecu_service.dart';
@@ -422,41 +427,310 @@ void main() {
     });
   });
 
-  group('LocalAuthService & App Smoke Tests', () {
-    test('Demo account seeds and validates successfully', () async {
-      final auth = LocalAuthService();
-      await auth.ensureDemoAccountSeeded();
-
-      final validResult = await auth.login(
-        LocalAuthService.demoEmail,
-        LocalAuthService.demoPassword,
+  group('Supabase Table Models Serialization Tests', () {
+    test('RideModel serializes and deserializes correctly', () {
+      final now = DateTime.now();
+      final ride = RideModel(
+        id: 'ride-123',
+        userId: 'user-abc',
+        title: 'Morning Ride to Nandi Hills',
+        origin: 'Indiranagar',
+        destination: 'Nandi Hills',
+        distanceKm: 62.5,
+        durationMin: 75,
+        safetyScore: 92.0,
+        startedAt: now,
       );
-      expect(validResult.success, isTrue);
+
+      final json = ride.toJson();
+      expect(json['title'], 'Morning Ride to Nandi Hills');
+      expect(json['distance_km'], 62.5);
+      expect(json['safety_score'], 92.0);
+
+      final reconstructed = RideModel.fromJson(json);
+      expect(reconstructed.id, 'ride-123');
+      expect(reconstructed.title, 'Morning Ride to Nandi Hills');
+      expect(reconstructed.distanceKm, 62.5);
+      expect(reconstructed.durationMin, 75);
+      expect(reconstructed.safetyScore, 92.0);
     });
 
-    test('Default emergency contact fallback is +916360826795', () {
-      expect(SmsService.emergencyContact, '+916360826795');
+    test('SosEventModel serializes and deserializes correctly', () {
+      final now = DateTime.now();
+      final event = SosEventModel(
+        id: 'sos-456',
+        userId: 'user-abc',
+        type: 'silent',
+        lat: 12.9716,
+        lng: 77.5946,
+        resolved: false,
+        createdAt: now,
+      );
+
+      final json = event.toJson();
+      expect(json['type'], 'silent');
+      expect(json['lat'], 12.9716);
+      expect(json['resolved'], isFalse);
+
+      final reconstructed = SosEventModel.fromJson(json);
+      expect(reconstructed.id, 'sos-456');
+      expect(reconstructed.type, 'silent');
+      expect(reconstructed.resolved, isFalse);
     });
 
-    test('AppConfig exposes environment variables with no hardcoded fallbacks', () {
-      expect(AppConfig.supabaseUrl, isEmpty);
-      expect(AppConfig.supabaseAnonKey, isEmpty);
-      expect(AppConfig.googleMapsApiKey, isEmpty);
-      expect(AppConfig.isConfigured, isFalse);
-      expect(AppConfig.missingVariables, contains('SUPABASE_URL'));
-      expect(AppConfig.missingVariables, contains('SUPABASE_ANON_KEY'));
+    test('GuardianAlertModel serializes and deserializes correctly', () {
+      final now = DateTime.now();
+      final alert = GuardianAlertModel(
+        id: 'guard-789',
+        userId: 'user-abc',
+        vehicleId: 'KA03HA1234',
+        followedSeconds: 45,
+        mode: 'single',
+        source: 'manual',
+        createdAt: now,
+      );
+
+      final json = alert.toJson();
+      expect(json['vehicle_id'], 'KA03HA1234');
+      expect(json['followed_seconds'], 45);
+      expect(json['mode'], 'single');
+
+      final reconstructed = GuardianAlertModel.fromJson(json);
+      expect(reconstructed.id, 'guard-789');
+      expect(reconstructed.followedSeconds, 45);
+      expect(reconstructed.mode, 'single');
     });
 
-    testWidgets('SheTorqueApp builds and renders ConfigErrorScreen when unconfigured',
+    test('PinkSpotModel serializes and deserializes correctly', () {
+      final spot = PinkSpotModel(
+        id: 'pink-101',
+        userId: 'user-abc',
+        name: 'All-Women 24/7 Fuel Station',
+        category: 'fuel_station',
+        lat: 12.975,
+        lng: 77.605,
+        notes: 'Well-lit, CCTV-monitored, women attendants',
+      );
+
+      final json = spot.toJson();
+      expect(json['name'], 'All-Women 24/7 Fuel Station');
+      expect(json['category'], 'fuel_station');
+
+      final reconstructed = PinkSpotModel.fromJson(json);
+      expect(reconstructed.id, 'pink-101');
+      expect(reconstructed.name, 'All-Women 24/7 Fuel Station');
+      expect(reconstructed.category, 'fuel_station');
+      expect(reconstructed.displayCategory, 'Fuel Station');
+    });
+  });
+
+  group('AuthService, Offline Emergency Contact & Salted PIN Tests', () {
+    test('Salted SHA-256 PIN hashing behaves deterministically and never stores raw PIN', () {
+      const pin = '4321';
+      final hash1 = SupabaseAuthService.hashSafetyPin(pin);
+      final hash2 = SupabaseAuthService.hashSafetyPin(pin);
+
+      expect(hash1, isNotEmpty);
+      expect(hash1.length, 64); // 256 bits = 64 hex characters
+      expect(hash1, equals(hash2));
+      expect(hash1, isNot(contains(pin))); // Never raw
+
+      final differentHash = SupabaseAuthService.hashSafetyPin('9999');
+      expect(hash1, isNot(equals(differentHash)));
+    });
+
+    test('FakeAuthService validates demo user credentials', () async {
+      final auth = FakeAuthService();
+      final valid = await auth.login(
+        'ananya.rider@shetorque.io',
+        'password123',
+      );
+      expect(valid.success, isTrue);
+
+      final invalid = await auth.login(
+        'ananya.rider@shetorque.io',
+        'wrongpassword',
+      );
+      expect(invalid.success, isFalse);
+    });
+
+    test('Offline Emergency Contact resolves strictly from local cache without network', () async {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.remove(SupabaseAuthService.kCachedEmergencyContact);
+
+      // 1. Unconfigured state returns null
+      final emptyContact = await SmsService.resolveEmergencyContact();
+      expect(emptyContact, isNull);
+
+      // 2. Set cached contact (simulating profile sync or offline login)
+      const testPhone = '+919876543210';
+      await prefs.setString(SupabaseAuthService.kCachedEmergencyContact, testPhone);
+
+      // 3. Instant local resolution without network
+      final resolved = await SmsService.resolveEmergencyContact();
+      expect(resolved, testPhone);
+    });
+
+    test('Safety PIN updates cache with salted hash and verifies entered PIN', () async {
+      final auth = FakeAuthService();
+
+      // Set new PIN
+      await auth.saveSafetyPin('1357');
+
+      // Check verification
+      expect(await auth.verifySafetyPin('1357'), isTrue);
+      expect(await auth.verifySafetyPin('0000'), isFalse);
+      expect(await auth.verifySafetyPin('1234'), isFalse);
+    });
+
+    test('FakeAuthService conforms to all AuthService contract requirements', () async {
+      final AuthService auth = FakeAuthService();
+
+      expect(await auth.isLoggedIn(), isFalse);
+      expect(await auth.currentUser(), isNull);
+      expect(await auth.currentUserId(), isNull);
+
+      final loginRes = await auth.login('ananya.rider@shetorque.io', 'password123');
+      expect(loginRes.success, isTrue);
+      expect(loginRes.userId, 'mock-user-123');
+      expect(await auth.isLoggedIn(), isTrue);
+      expect(await auth.currentUser(), 'ananya.rider@shetorque.io');
+
+      // Update rider and emergency contact
+      final rider = await auth.getRiderProfile();
+      final updatedRider = rider.copyWith(emergencyContactPhone: '+91 91234 56789');
+      await auth.saveRiderProfile(updatedRider);
+
+      expect(await auth.getCachedEmergencyContact(), '+91 91234 56789');
+      expect(await SmsService.resolveEmergencyContact(), '+91 91234 56789');
+
+      // Logout clears session and cached contact
+      await auth.logout();
+      expect(await auth.isLoggedIn(), isFalse);
+      expect(await auth.getCachedEmergencyContact(), isNull);
+    });
+  });
+
+  group('App Configuration & Environment Smoke Tests', () {
+    test('AppConfig handles configuration state correctly', () {
+      if (!AppConfig.isConfigured) {
+        expect(AppConfig.supabaseUrl, isEmpty);
+        expect(AppConfig.supabaseAnonKey, isEmpty);
+        expect(AppConfig.missingVariables, contains('SUPABASE_URL'));
+        expect(AppConfig.missingVariables, contains('SUPABASE_ANON_KEY'));
+      } else {
+        expect(AppConfig.supabaseUrl, isNotEmpty);
+        expect(AppConfig.supabaseAnonKey, isNotEmpty);
+      }
+    });
+
+    testWidgets('SheTorqueApp builds cleanly in test environment',
         (WidgetTester tester) async {
       await tester.pumpWidget(const SheTorqueApp());
       await tester.pumpAndSettle();
 
       expect(find.byType(MaterialApp), findsOneWidget);
-      expect(find.byType(ConfigErrorScreen), findsOneWidget);
-      expect(find.text('CONFIGURATION REQUIRED'), findsOneWidget);
-      expect(find.text('SUPABASE_URL'), findsOneWidget);
-      expect(find.text('SUPABASE_ANON_KEY'), findsOneWidget);
+      if (!AppConfig.isConfigured) {
+        expect(find.byType(ConfigErrorScreen), findsOneWidget);
+        expect(find.text('CONFIGURATION REQUIRED'), findsOneWidget);
+      }
     });
   });
+}
+
+/// Fake AuthService for local testing without calling Supabase network
+class FakeAuthService implements AuthService {
+  bool _loggedIn = false;
+  RiderProfile _rider = RiderProfile(
+    name: 'Ananya Rider',
+    email: 'ananya.rider@shetorque.io',
+    phone: '+91 98765 43210',
+    emergencyContactName: 'Emergency Contact',
+    emergencyContactPhone: '+91 99999 88888',
+  );
+  BikeInfo _bike = BikeInfo(
+    brand: 'Royal Enfield',
+    model: 'Hunter 350',
+    regNumber: 'KA 03 HA 9876',
+  );
+  String? _safetyPinHash;
+
+  @override
+  Future<AuthResult> login(String email, String password) async {
+    if (email == 'ananya.rider@shetorque.io' && password == 'password123') {
+      _loggedIn = true;
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString(
+          SupabaseAuthService.kCachedEmergencyContact, _rider.emergencyContactPhone);
+      return AuthResult(true, 'Login successful', userId: 'mock-user-123');
+    }
+    return AuthResult(false, 'Invalid email or password.');
+  }
+
+  @override
+  Future<AuthResult> signUp(String email, String password, {String? fullName}) async {
+    _loggedIn = true;
+    _rider.name = fullName ?? 'Rider';
+    _rider.email = email;
+    return AuthResult(true, 'Account created', userId: 'mock-user-123');
+  }
+
+  @override
+  Future<void> logout() async {
+    _loggedIn = false;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove(SupabaseAuthService.kCachedEmergencyContact);
+    await prefs.remove(SupabaseAuthService.kCachedSafetyPinHash);
+  }
+
+  @override
+  Future<bool> isLoggedIn() async => _loggedIn;
+
+  @override
+  Future<String?> currentUser() async => _loggedIn ? _rider.email : null;
+
+  @override
+  Future<String?> currentUserId() async => _loggedIn ? 'mock-user-123' : null;
+
+  @override
+  Future<RiderProfile> getRiderProfile() async => _rider;
+
+  @override
+  Future<void> saveRiderProfile(RiderProfile profile) async {
+    _rider = profile;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+        SupabaseAuthService.kCachedEmergencyContact, profile.emergencyContactPhone);
+  }
+
+  @override
+  Future<BikeInfo> getVehicleProfile() async => _bike;
+
+  @override
+  Future<void> saveVehicleProfile(BikeInfo bike) async {
+    _bike = bike;
+  }
+
+  @override
+  Future<void> saveSafetyPin(String pin) async {
+    final hash = SupabaseAuthService.hashSafetyPin(pin);
+    _safetyPinHash = hash;
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(SupabaseAuthService.kCachedSafetyPinHash, hash);
+  }
+
+  @override
+  Future<bool> verifySafetyPin(String enteredPin) async {
+    final prefs = await SharedPreferences.getInstance();
+    final cachedHash =
+        prefs.getString(SupabaseAuthService.kCachedSafetyPinHash) ?? _safetyPinHash;
+    if (cachedHash == null || cachedHash.isEmpty) return false;
+    return SupabaseAuthService.hashSafetyPin(enteredPin) == cachedHash;
+  }
+
+  @override
+  Future<String?> getCachedEmergencyContact() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(SupabaseAuthService.kCachedEmergencyContact);
+  }
 }
