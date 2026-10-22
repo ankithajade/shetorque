@@ -71,6 +71,10 @@ class SosNotificationService {
   Future<void> cancelNotification() async {
     _countdownTimer?.cancel();
     _countdownTimer = null;
-    await _flutterLocalNotificationsPlugin.cancel(1001);
+    try {
+      await _flutterLocalNotificationsPlugin
+          .cancel(1001)
+          .timeout(const Duration(milliseconds: 200), onTimeout: () => null);
+    } catch (_) {}
   }
 }

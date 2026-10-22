@@ -19,6 +19,7 @@ class _SafeCancelButtonState extends State<SafeCancelButton>
   @override
   void initState() {
     super.initState();
+    debugPrint('[SHIELD] SafeCancelButton State($hashCode) initState');
     _pulseController = AnimationController(
       vsync: this,
       duration: const Duration(seconds: 2),
@@ -31,12 +32,15 @@ class _SafeCancelButtonState extends State<SafeCancelButton>
 
   @override
   void dispose() {
+    debugPrint('[SHIELD] SafeCancelButton State($hashCode) dispose');
     _pulseController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
+    debugPrint(
+        '[SHIELD] SafeCancelButton State($hashCode) build (expanded: $_expanded)');
     return AnimatedSize(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeOut,
@@ -50,13 +54,19 @@ class _SafeCancelButtonState extends State<SafeCancelButton>
       child: FloatingActionButton.small(
         heroTag: 'safe_cancel_fab',
         backgroundColor: const Color(0xFF2E7D32),
-        onPressed: () => setState(() => _expanded = true),
+        onPressed: () {
+          debugPrint(
+              '[SHIELD] SafeCancelButton State($hashCode) tapped collapsed FAB -> expanding');
+          setState(() => _expanded = true);
+        },
         child: const Icon(Icons.shield_outlined, color: Colors.white),
       ),
     );
   }
 
   Widget _buildExpanded() {
+    debugPrint(
+        '[SHIELD] SafeCancelButton State($hashCode) _buildExpanded rendering');
     return Container(
       decoration: BoxDecoration(
         color: const Color(0xFF2E7D32),
@@ -67,7 +77,11 @@ class _SafeCancelButtonState extends State<SafeCancelButton>
         mainAxisSize: MainAxisSize.min,
         children: [
           GestureDetector(
-            onTap: () => setState(() => _expanded = false),
+            onTap: () {
+              debugPrint(
+                  '[SHIELD] SafeCancelButton State($hashCode) close tapped -> collapsing');
+              setState(() => _expanded = false);
+            },
             child: const Icon(Icons.close, color: Colors.white70, size: 18),
           ),
           const SizedBox(width: 8),
@@ -81,7 +95,11 @@ class _SafeCancelButtonState extends State<SafeCancelButton>
               ),
               elevation: 0,
             ),
-            onPressed: widget.onConfirmed,
+            onPressed: () {
+              debugPrint(
+                  '[SHIELD] SafeCancelButton State($hashCode) I Am Safe tapped -> invoking onConfirmed');
+              widget.onConfirmed();
+            },
             child: const Text('I Am Safe',
                 style: TextStyle(fontWeight: FontWeight.w600)),
           ),

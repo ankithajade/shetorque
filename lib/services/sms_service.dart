@@ -31,8 +31,28 @@ class SmsDispatchResult {
 /// Guaranteed zero network dependency during an active emergency by strictly
 /// reading the cached recipient phone and rider identity from [SharedPreferences].
 class SmsService {
+  static const String kDemoModeKey = 'demo_mode_enabled';
   static const _smsChannel = MethodChannel('com.shetorque.hub/sms');
   static final SosEventsRepository _sosRepo = SosEventsRepository();
+
+  /// Resolves whether Demo Mode is active. Reads from [SharedPreferences] cache,
+  /// defaulting to true so no real SMS is accidentally dispatched without explicit opt-in.
+  static Future<bool> isDemoModeEnabled() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      return prefs.getBool(kDemoModeKey) ?? true;
+    } catch (_) {
+      return true;
+    }
+  }
+
+  /// Persists Demo Mode state to local cache.
+  static Future<void> setDemoModeEnabled(bool enabled) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool(kDemoModeKey, enabled);
+    } catch (_) {}
+  }
 
   /// Resolves the emergency contact phone number strictly from local SharedPreferences cache.
   /// NEVER makes any network calls. Returns null if no contact is configured.
@@ -115,8 +135,9 @@ class SmsService {
   /// Dispatches or simulates Crash SOS alert.
   static Future<SmsDispatchResult> dispatchCrashAlert(
     Position position, {
-    bool isDemoMode = false,
+    bool? isDemoMode,
   }) async {
+    final demo = isDemoMode ?? await isDemoModeEnabled();
     final contact = await resolveEmergencyContact();
     final contactName = await resolveEmergencyContactName() ?? 'Emergency Contact';
     final message = await buildEmergencyMessage(position: position, type: 'crash');
@@ -129,11 +150,11 @@ class SmsService {
         message: 'No emergency contact configured in local cache.',
         recipientPhone: null,
         recipientName: contactName,
-        isDemo: isDemoMode,
+        isDemo: demo,
       );
     }
 
-    if (isDemoMode) {
+    if (demo) {
       // In demo mode: log to Supabase best-effort, do NOT trigger native SMS
       _logSosBestEffort('crash', position.latitude, position.longitude);
       return SmsDispatchResult(
@@ -174,7 +195,7 @@ class SmsService {
   /// Standard boolean wrapper for Crash Alert to support background safety host.
   static Future<bool> sendCrashAlert(
     Position position, {
-    bool isDemoMode = false,
+    bool? isDemoMode,
   }) async {
     final res = await dispatchCrashAlert(position, isDemoMode: isDemoMode);
     return res.success;
@@ -183,8 +204,9 @@ class SmsService {
   /// Dispatches or simulates Silent SOS alert.
   static Future<SmsDispatchResult> dispatchStealthAlert(
     Position position, {
-    bool isDemoMode = false,
+    bool? isDemoMode,
   }) async {
+    final demo = isDemoMode ?? await isDemoModeEnabled();
     final contact = await resolveEmergencyContact();
     final contactName = await resolveEmergencyContactName() ?? 'Emergency Contact';
     final message = await buildEmergencyMessage(position: position, type: 'silent');
@@ -197,11 +219,11 @@ class SmsService {
         message: 'No emergency contact configured in local cache.',
         recipientPhone: null,
         recipientName: contactName,
-        isDemo: isDemoMode,
+        isDemo: demo,
       );
     }
 
-    if (isDemoMode) {
+    if (demo) {
       _logSosBestEffort('silent', position.latitude, position.longitude);
       return SmsDispatchResult(
         success: true,
@@ -241,7 +263,7 @@ class SmsService {
   /// Standard boolean wrapper for Stealth Alert.
   static Future<bool> sendStealthAlert(
     Position position, {
-    bool isDemoMode = false,
+    bool? isDemoMode,
   }) async {
     final res = await dispatchStealthAlert(position, isDemoMode: isDemoMode);
     return res.success;
@@ -251,9 +273,10 @@ class SmsService {
   static Future<bool> sendLocationUpdate(
     Position position,
     int updateCount, {
-    bool isDemoMode = false,
+    bool? isDemoMode,
   }) async {
-    if (isDemoMode) return true;
+    final demo = isDemoMode ?? await isDemoModeEnabled();
+    if (demo) return true;
     final contact = await resolveEmergencyContact();
     if (contact == null || contact.isEmpty) return false;
 
@@ -277,11 +300,12 @@ class SmsService {
 
   /// Used by SILENT SOS — Safe Confirmation resolution.
   /// Also marks the active SOS event in Supabase as resolved.
-  static Future<bool> sendSafeConfirmation({bool isDemoMode = false}) async {
+  static Future<bool> sendSafeConfirmation({bool? isDemoMode}) async {
     // 1. Resolve active SOS event in Supabase if logged
     _resolveActiveSosEvent();
 
-    if (isDemoMode) return true;
+    final demo = isDemoMode ?? await isDemoModeEnabled();
+    if (demo) return true;
 
     final contact = await resolveEmergencyContact();
     if (contact == null || contact.isEmpty) return false;
@@ -329,10 +353,18 @@ class SmsService {
 
   /// Sends a real SMS to the emergency contact alerting them of a persistent
   /// following vehicle. Reads contact from local cache — no network dependency.
+  /// Blocked if [isDemoMode] or global demo mode is enabled.
   static Future<void> sendGuardianFollowerAlert({
     required String trackId,
     required int followedSeconds,
+    bool? isDemoMode,
   }) async {
+    final demo = isDemoMode ?? await isDemoModeEnabled();
+    if (demo) {
+      debugPrint('sendGuardianFollowerAlert [DEMO MODE]: Real SMS blocked for $trackId');
+      return;
+    }
+
     final phone = await resolveEmergencyContact();
     final riderName = (await resolveRiderProfileString()) ?? 'Rider';
     if (phone == null || phone.isEmpty) return;

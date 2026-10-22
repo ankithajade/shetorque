@@ -13,6 +13,7 @@ import '../services/emergency_siren_service.dart';
 import '../services/occlusion_detector.dart';
 import '../services/sms_service.dart';
 import '../services/sos_session_manager.dart';
+import 'pin_checkin_screen.dart';
 
 /// Safety Hub screen hosting live sensor fusion telemetry, crash detection,
 /// silent SOS state machine, interactive demo simulation mode, and cloud SOS history.
@@ -63,6 +64,19 @@ class _SafetyHubScreenState extends State<SafetyHubScreen> {
     _loadEmergencyContact();
     _initSensors();
     _fetchSosHistory();
+    SmsService.isDemoModeEnabled().then((val) {
+      if (mounted) setState(() => _isDemoMode = val);
+    });
+    SosSessionManager.sessionActiveNotifier.addListener(_onSessionActiveChanged);
+  }
+
+  void _onSessionActiveChanged() {
+    if (!mounted) return;
+    final isActive = SosSessionManager.sessionActiveNotifier.value;
+    if (!isActive && _silentState != StealthSosState.idle) {
+      setState(() => _silentState = StealthSosState.idle);
+      _fetchSosHistory();
+    }
   }
 
   Future<void> _loadEmergencyContact() async {
@@ -332,19 +346,16 @@ class _SafetyHubScreenState extends State<SafetyHubScreen> {
 
   Future<void> _resolveSilentSos() async {
     await HapticFeedback.heavyImpact();
-    await SmsService.sendSafeConfirmation(isDemoMode: _isDemoMode);
-    await SosSessionManager.endSession();
-
-    if (mounted) {
-      setState(() => _silentState = StealthSosState.idle);
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Silent SOS session safely resolved and cloud logged.'),
-          backgroundColor: SheTorqueTheme.successGreen,
+    if (!mounted) return;
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (ctx) => PinCheckinScreen(
+          onSafeConfirmed: () {
+            Navigator.of(ctx).pop();
+          },
         ),
-      );
-      _fetchSosHistory();
-    }
+      ),
+    );
   }
 
   // ==========================================================================
@@ -460,6 +471,7 @@ class _SafetyHubScreenState extends State<SafetyHubScreen> {
 
   @override
   void dispose() {
+    SosSessionManager.sessionActiveNotifier.removeListener(_onSessionActiveChanged);
     _accelerometerSub?.cancel();
     _crashTimer?.cancel();
     _armedTimer?.cancel();
@@ -510,6 +522,7 @@ class _SafetyHubScreenState extends State<SafetyHubScreen> {
                     inactiveThumbColor: SheTorqueTheme.dangerRed,
                     onChanged: (val) {
                       setState(() => _isDemoMode = val);
+                      SmsService.setDemoModeEnabled(val);
                     },
                   ),
                 ),

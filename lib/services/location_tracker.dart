@@ -66,7 +66,12 @@ class LocationTracker {
     _isDispatching = true;
     _updateCount++;
     try {
-      await SmsService.sendLocationUpdate(_lastKnownPosition!, _updateCount);
+      final isDemo = await SmsService.isDemoModeEnabled();
+      await SmsService.sendLocationUpdate(
+        _lastKnownPosition!,
+        _updateCount,
+        isDemoMode: isDemo,
+      );
     } finally {
       // Cooldown to prevent duplicate dispatch if timers fire similarly
       await Future.delayed(const Duration(seconds: 10));
@@ -74,10 +79,15 @@ class LocationTracker {
     }
   }
 
-  void _handleSessionExpiry() {
+  void _handleSessionExpiry() async {
     if (_lastKnownPosition != null) {
       _updateCount++;
-      SmsService.sendLocationUpdate(_lastKnownPosition!, _updateCount);
+      final isDemo = await SmsService.isDemoModeEnabled();
+      await SmsService.sendLocationUpdate(
+        _lastKnownPosition!,
+        _updateCount,
+        isDemoMode: isDemo,
+      );
     }
     stopTracking();
     if (onSessionExpired != null) {

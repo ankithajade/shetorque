@@ -17,7 +17,6 @@ import '../../services/location_tracker.dart';
 import '../../services/sos_notification_service.dart';
 import '../../services/sos_session_manager.dart';
 import '../../services/occlusion_detector.dart';
-import '../../widgets/safe_cancel_button.dart';
 import '../pin_checkin_screen.dart';
 import 'tabs/garage_tab.dart';
 import 'tabs/rides_tab.dart';
@@ -84,6 +83,10 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     _vehicleHealth = _diagnosticEngine.evaluate(_ecuData);
     _ecuSubscription = _ecuService.telemetryStream.listen((data) {
       if (mounted) {
+        if (SosSessionManager.sessionActiveNotifier.value) {
+          debugPrint(
+              '[SHIELD] Dashboard setState while session active (ECU telemetry tick)');
+        }
         setState(() {
           _ecuData = data;
           _vehicleHealth = _diagnosticEngine.evaluate(data);
@@ -94,6 +97,8 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
 
     _loadUserProfiles();
     _initSafetyHost();
+    SosSessionManager.sessionActiveNotifier
+        .addListener(_onSessionActiveNotification);
 
     _pulseController = AnimationController(
       vsync: this,
@@ -149,18 +154,63 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     } catch (_) {}
   }
 
-  /// Opens the PIN check-in screen. Used by the shield button when the rider
-  /// wants to confirm they are safe and resolve the active SOS session.
-  void _openPinCheckin() {
-    Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (ctx) => PinCheckinScreen(
-          onSafeConfirmed: () {
-            Navigator.of(ctx).pop();
-          },
-        ),
-      ),
+  void _onSessionActiveNotification() {
+    final active = SosSessionManager.sessionActiveNotifier.value;
+    debugPrint('[SHIELD] sessionActiveNotifier changed: $active');
+    if (!mounted) return;
+    if (!active && _stealthSosState != StealthSosState.idle) {
+      setState(() {
+        _stealthSosState = StealthSosState.idle;
+      });
+    }
+  }
+
+  void _pauseDashboardSafetyMonitoring() {
+    _occlusionDetector.stopMonitoring();
+    _accelerometerSubscription?.cancel();
+    _accelerometerSubscription = null;
+  }
+
+  void _resumeDashboardSafetyMonitoring() {
+    _occlusionDetector.startMonitoring();
+    _startCrashSensorListener();
+  }
+
+  Future<void> _openSafetyHub() async {
+    _pauseDashboardSafetyMonitoring();
+    await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const SafetyHubScreen()),
     );
+    if (mounted) {
+      _resumeDashboardSafetyMonitoring();
+    }
+  }
+
+  bool _isOpeningPinScreen = false;
+
+  /// Opens the PIN check-in screen. Used by the active SOS banner when the rider
+  /// wants to confirm they are safe and resolve the active SOS session.
+  void _openPinCheckin() async {
+    if (_isOpeningPinScreen) {
+      debugPrint('[SHIELD] _openPinCheckin ignored: PIN screen already opening');
+      return;
+    }
+    _isOpeningPinScreen = true;
+    debugPrint('[SHIELD] Before Navigator.push to PinCheckinScreen');
+    try {
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (ctx) => PinCheckinScreen(
+            onSafeConfirmed: () {
+              Navigator.of(ctx).pop();
+            },
+          ),
+        ),
+      );
+    } finally {
+      _isOpeningPinScreen = false;
+      debugPrint('[SHIELD] After Navigator.push to PinCheckinScreen');
+    }
   }
 
   /// Single, exclusive listener for Accelerometer events
@@ -229,10 +279,14 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
     _occlusionDetector.setArmed(false);
     await SosSessionManager.startSession();
 
+    final isDemo = await SmsService.isDemoModeEnabled();
+    SmsDispatchResult? result;
+
     try {
       final Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
-      await SmsService.sendStealthAlert(position);
+      result =
+          await SmsService.dispatchStealthAlert(position, isDemoMode: isDemo);
     } catch (_) {}
 
     await SosNotificationService().showPersistentNotification();
@@ -258,10 +312,19 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
       setState(() {
         _stealthSosState = StealthSosState.tracking;
       });
+      if (isDemo && result != null) {
+        _showDemoSmsPreviewDialog(
+          title: 'SILENT SOS SIMULATION (DEMO MODE)',
+          recipientName: result.recipientName ?? 'Emergency Contact',
+          recipientPhone: result.recipientPhone ?? 'Cached Contact',
+          messagePreview: result.message,
+        );
+      }
     }
   }
 
   Future<void> _resolveStealthSos() async {
+    debugPrint('[SHIELD] _resolveStealthSos called');
     await HapticFeedback.heavyImpact();
     // Open PIN check-in. PinCheckinScreen calls endSession() on correct PIN.
     if (mounted) _openPinCheckin();
@@ -294,12 +357,23 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
   }
 
   Future<void> _sendCrashFinalSOS() async {
+    final isDemo = await SmsService.isDemoModeEnabled();
+    SmsDispatchResult? result;
     try {
       final Position position = await Geolocator.getCurrentPosition(
           desiredAccuracy: LocationAccuracy.high);
-      await SmsService.sendCrashAlert(position);
+      result =
+          await SmsService.dispatchCrashAlert(position, isDemoMode: isDemo);
     } catch (_) {}
     _onCrashSosSent();
+    if (isDemo && result != null && mounted) {
+      _showDemoSmsPreviewDialog(
+        title: 'CRASH SOS SIMULATION (DEMO MODE)',
+        recipientName: result.recipientName ?? 'Emergency Contact',
+        recipientPhone: result.recipientPhone ?? 'Cached Contact',
+        messagePreview: result.message,
+      );
+    }
   }
 
   void _onCrashSosSent() {
@@ -489,10 +563,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
               _currentTabIndex = index;
             });
           },
-          onSafetyHubPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(
-                builder: (_) => const SafetyHubScreen()),
-          ),
+          onSafetyHubPressed: _openSafetyHub,
           onGuardianEyePressed: () => Navigator.of(context).push(
             MaterialPageRoute(
                 builder: (_) => const GuardianEyeScreen()),
@@ -517,10 +588,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
           ecuData: _ecuData,
           vehicleHealth: _vehicleHealth,
           onSosPressed: _showTestEmergencyModal,
-          onSafetyHubPressed: () => Navigator.of(context).push(
-            MaterialPageRoute(
-                builder: (_) => const SafetyHubScreen()),
-          ),
+          onSafetyHubPressed: _openSafetyHub,
           onGuardianEyePressed: () => Navigator.of(context).push(
             MaterialPageRoute(
                 builder: (_) => const GuardianEyeScreen()),
@@ -652,6 +720,16 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
                     ),
                   ),
                 ),
+
+              // ── Active SOS Pinned Full-Width Banner (Stage 4.1 Requirement 2) ──
+              ValueListenableBuilder<bool>(
+                valueListenable: SosSessionManager.sessionActiveNotifier,
+                builder: (ctx, isActive, child) {
+                  if (!isActive) return const SizedBox.shrink();
+                  return _buildActiveSosBanner();
+                },
+              ),
+
               Expanded(child: _buildCurrentTab()),
             ],
           ),
@@ -714,42 +792,7 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
           ),
         ),
 
-        // --- OVERLAY: Stealth SOS Pulsing Red Dot + "I Am Safe" Shield ---
-        // Driven by sessionActiveNotifier so it appears the instant the SOS fires.
-        ValueListenableBuilder<bool>(
-          valueListenable: SosSessionManager.sessionActiveNotifier,
-          builder: (ctx, isActive, child) {
-            if (!isActive) return const SizedBox.shrink();
-            return Stack(
-              children: [
-                // Pulsing red dot
-                Positioned(
-                  top: 40,
-                  right: 20,
-                  child: FadeTransition(
-                    opacity: _pulseAnimation,
-                    child: Container(
-                      width: 12,
-                      height: 12,
-                      decoration: const BoxDecoration(
-                        color: Colors.red,
-                        shape: BoxShape.circle,
-                      ),
-                    ),
-                  ),
-                ),
-                // Shield button
-                Positioned(
-                  bottom: 74,
-                  left: 16,
-                  child: SafeCancelButton(
-                    onConfirmed: _resolveStealthSos,
-                  ),
-                ),
-              ],
-            );
-          },
-        ),
+
 
         // --- OVERLAY: Armed Buffer 5s Countdown ---
         if (_stealthSosState == StealthSosState.armed) ...[
@@ -872,16 +915,212 @@ class _MainDashboardScreenState extends State<MainDashboardScreen>
 
   @override
   void dispose() {
+    SosSessionManager.sessionActiveNotifier
+        .removeListener(_onSessionActiveNotification);
+    _pauseDashboardSafetyMonitoring();
     _ecuSubscription?.cancel();
     _ecuService.stop();
-    _accelerometerSubscription?.cancel();
     _crashDisplayTimer?.cancel();
     _armedTimer?.cancel();
     _armedCountdownTimer?.cancel();
-    _occlusionDetector.stopMonitoring();
     _audioPlayer.dispose();
     _pulseController.dispose();
     super.dispose();
+  }
+
+  /// Pinned full-width, high-contrast banner displayed while SOS session is active.
+  /// Minimum 56dp tall, with pulsing red dot and shield icon. ONE tap opens PIN screen.
+  Widget _buildActiveSosBanner() {
+    return Material(
+      color: Colors.red.shade900,
+      elevation: 4,
+      child: InkWell(
+        onTap: () {
+          debugPrint(
+              '[SHIELD] Active SOS Banner tapped -> calling _resolveStealthSos');
+          _resolveStealthSos();
+        },
+        child: Container(
+          constraints: const BoxConstraints(minHeight: 56),
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: BoxDecoration(
+            color: Colors.red.shade900,
+            border: const Border(
+              bottom: BorderSide(color: Colors.redAccent, width: 1.5),
+            ),
+          ),
+          child: Row(
+            children: [
+              // Pulsing red dot
+              FadeTransition(
+                opacity: _pulseAnimation,
+                child: Container(
+                  width: 14,
+                  height: 14,
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 12),
+              // Shield icon
+              const Icon(
+                Icons.shield_rounded,
+                color: Colors.white,
+                size: 26,
+              ),
+              const SizedBox(width: 12),
+              // High-contrast alert text
+              const Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      'SILENT SOS ACTIVE',
+                      style: TextStyle(
+                        color: Colors.white,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 0.8,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      'Tap to enter safety PIN & cancel alert',
+                      style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const Icon(
+                Icons.chevron_right_rounded,
+                color: Colors.white,
+                size: 24,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showDemoSmsPreviewDialog({
+    required String title,
+    required String recipientName,
+    required String recipientPhone,
+    required String messagePreview,
+  }) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: SheTorqueTheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(20),
+          side: const BorderSide(
+              color: SheTorqueTheme.secondaryPink, width: 1.5),
+        ),
+        title: Row(
+          children: [
+            const Icon(Icons.mark_email_read_rounded,
+                color: SheTorqueTheme.secondaryPink, size: 24),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: SheTorqueTheme.textWhite,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: SheTorqueTheme.secondaryPink.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.person_pin_rounded,
+                      color: SheTorqueTheme.secondaryPink, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Target Recipient: $recipientName ($recipientPhone)',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                        color: SheTorqueTheme.textWhite,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 14),
+            const Text(
+              'Autonomous SMS Message Payload (DEMO MODE):',
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: SheTorqueTheme.textMuted,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: SheTorqueTheme.surfaceLight,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: SheTorqueTheme.border),
+              ),
+              child: SelectableText(
+                messagePreview,
+                style: const TextStyle(
+                  fontFamily: 'monospace',
+                  fontSize: 12,
+                  color: SheTorqueTheme.primaryCyan,
+                  height: 1.4,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              'No native SMS was dispatched because DEMO MODE is active.',
+              style: TextStyle(
+                fontSize: 11,
+                color: SheTorqueTheme.warningAmber,
+                fontStyle: FontStyle.italic,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('DISMISS',
+                style: TextStyle(
+                    color: SheTorqueTheme.secondaryPink,
+                    fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
   }
 }
 

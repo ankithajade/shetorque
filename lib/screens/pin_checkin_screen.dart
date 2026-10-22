@@ -57,12 +57,26 @@ class _PinCheckinScreenState extends State<PinCheckinScreen> {
   }
 
   Future<void> _confirmSafe() async {
-    // Stop siren if it was playing during crash detection
-    EmergencySirenService.instance.stopSiren();
-    // Dismiss the persistent notification
-    await SosNotificationService().cancelNotification();
-    await SmsService.sendSafeConfirmation();
+    // 1. Stop siren if it was playing during crash detection
+    try {
+      EmergencySirenService.instance.stopSiren();
+    } catch (_) {}
+
+    // 2. Dismiss persistent ongoing notification
+    try {
+      await SosNotificationService().cancelNotification();
+    } catch (_) {}
+
+    // 3. Send safe confirmation SMS (or simulate in demo mode)
+    try {
+      final isDemo = await SmsService.isDemoModeEnabled();
+      await SmsService.sendSafeConfirmation(isDemoMode: isDemo);
+    } catch (_) {}
+
+    // 4. Mark session ended in SosSessionManager (flips notifier to false)
     await SosSessionManager.endSession();
+
+    // 5. Notify caller
     widget.onSafeConfirmed();
   }
 

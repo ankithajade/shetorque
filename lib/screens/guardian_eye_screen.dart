@@ -132,14 +132,15 @@ class _GuardianEyeScreenState extends State<GuardianEyeScreen> {
   void _shareLoc(FollowingAlert alert) async {
     // Uses the same message format as SmsService crash alert,
     // but content describes the follower situation.
-    final msg = widget.isDemoMode;
-    if (msg) {
-      _showSmsPreview(alert);
+    final isDemo = await SmsService.isDemoModeEnabled();
+    if (isDemo || widget.isDemoMode) {
+      if (mounted) _showSmsPreview(alert);
     } else {
       // Real SMS via SmsService (re-use existing pipeline)
       await SmsService.sendGuardianFollowerAlert(
         trackId: alert.trackId,
         followedSeconds: alert.followedSeconds,
+        isDemoMode: false,
       );
     }
   }
