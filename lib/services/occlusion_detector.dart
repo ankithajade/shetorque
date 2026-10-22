@@ -6,9 +6,13 @@ class OcclusionDetector {
   StreamSubscription<int>? _proximitySubscription;
   Timer? _coverageTimer;
   bool _isArmed = false;
+  bool _isNear = false;
+
+  bool get isNear => _isNear;
   
   VoidCallback? onOcclusionConfirmed;
   VoidCallback? onCancelGestureDetected;
+  ValueChanged<bool>? onProximityStateChanged;
 
   void startMonitoring() {
     _proximitySubscription?.cancel();
@@ -38,10 +42,11 @@ class OcclusionDetector {
   }
 
   void _onProximityReading(int proximity) {
-    // proximity_sensor example uses event > 0 to signify near.
-    // Standard android usually emits 0 for near. 
-    // We will assume event > 0 means true for near based on package docs.
     final bool isCovered = (proximity > 0);
+    if (_isNear != isCovered) {
+      _isNear = isCovered;
+      onProximityStateChanged?.call(isCovered);
+    }
 
     if (isCovered) {
       _coverageTimer ??= Timer(Duration(seconds: _isArmed ? 1 : 3), () {

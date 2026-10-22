@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:geolocator/geolocator.dart';
@@ -6,11 +7,29 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'sos_session_manager.dart';
 import 'supabase_auth_service.dart';
 import '../repositories/sos_events_repository.dart';
+import '../models/rider_profile.dart';
+
+/// Result envelope for emergency SMS dispatches and demo simulation previews.
+class SmsDispatchResult {
+  final bool success;
+  final String message;
+  final String? recipientPhone;
+  final String? recipientName;
+  final bool isDemo;
+
+  const SmsDispatchResult({
+    required this.success,
+    required this.message,
+    this.recipientPhone,
+    this.recipientName,
+    this.isDemo = false,
+  });
+}
 
 /// Service responsible for dispatching autonomous emergency SMS alerts.
 ///
 /// Guaranteed zero network dependency during an active emergency by strictly
-/// reading the cached recipient phone from [SharedPreferences].
+/// reading the cached recipient phone and rider identity from [SharedPreferences].
 class SmsService {
   static const _smsChannel = MethodChannel('com.shetorque.hub/sms');
   static final SosEventsRepository _sosRepo = SosEventsRepository();
@@ -29,122 +48,282 @@ class SmsService {
     return null;
   }
 
-  // Used by CRASH SOS
-  static Future<bool> sendCrashAlert(Position position) async {
+  /// Resolves the emergency contact name strictly from local cache.
+  static Future<String?> resolveEmergencyContactName() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final name =
+          prefs.getString(SupabaseAuthService.kCachedEmergencyName)?.trim();
+      if (name != null && name.isNotEmpty) return name;
+    } catch (_) {}
+    return null;
+  }
+
+  /// Resolves formatted rider profile identity string ("Name (Phone)") from offline cache.
+  /// Omits missing fields gracefully to guarantee reliable single-segment SMS output.
+  static Future<String?> resolveRiderProfileString() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final cachedJson = prefs.getString(SupabaseAuthService.kCachedRiderProfile);
+      String? name;
+      String? phone;
+
+      if (cachedJson != null && cachedJson.isNotEmpty) {
+        try {
+          final profile =
+              RiderProfile.fromJson(jsonDecode(cachedJson) as Map<String, dynamic>);
+          if (profile.name.trim().isNotEmpty) name = profile.name.trim();
+          if (profile.phone.trim().isNotEmpty) phone = profile.phone.trim();
+        } catch (_) {}
+      }
+
+      if (name == null || name.isEmpty) {
+        name = await SosSessionManager.getRiderName();
+      }
+
+      if (name != null && name.isNotEmpty && phone != null && phone.isNotEmpty) {
+        return '$name ($phone)';
+      } else if (name != null && name.isNotEmpty) {
+        return name;
+      } else if (phone != null && phone.isNotEmpty) {
+        return phone;
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Constructs standard SheTorque emergency SMS text fitting within a single 160-char segment.
+  ///
+  /// Example: "SheTorque SOS: Ananya Rider (+919876543210) Crash detected! Location: https://maps.google.com/?q=12.97,77.59 Time: 11:35"
+  static Future<String> buildEmergencyMessage({
+    required Position position,
+    required String type, // 'crash' | 'silent'
+  }) async {
+    final riderInfo = await resolveRiderProfileString();
+    final mapLink =
+        "https://maps.google.com/?q=${position.latitude},${position.longitude}";
+    final time = _formatTime(DateTime.now());
+
+    final who = (riderInfo != null && riderInfo.isNotEmpty) ? '$riderInfo ' : '';
+    if (type == 'crash') {
+      return "SheTorque SOS: ${who}Crash detected! Location: $mapLink Time: $time";
+    } else {
+      return "SheTorque SOS: ${who}may need help. Location: $mapLink Time: $time";
+    }
+  }
+
+  /// Dispatches or simulates Crash SOS alert.
+  static Future<SmsDispatchResult> dispatchCrashAlert(
+    Position position, {
+    bool isDemoMode = false,
+  }) async {
     final contact = await resolveEmergencyContact();
+    final contactName = await resolveEmergencyContactName() ?? 'Emergency Contact';
+    final message = await buildEmergencyMessage(position: position, type: 'crash');
+
     if (contact == null || contact.isEmpty) {
-      debugPrint(
-          'SmsService: Cannot send crash alert. No emergency contact configured in local cache.');
-      // Best-effort database log even if SMS cannot be sent
+      debugPrint('SmsService: Cannot send crash alert. No contact cached.');
       _logSosBestEffort('crash', position.latitude, position.longitude);
-      return false;
+      return SmsDispatchResult(
+        success: false,
+        message: 'No emergency contact configured in local cache.',
+        recipientPhone: null,
+        recipientName: contactName,
+        isDemo: isDemoMode,
+      );
     }
 
-    String mapLink =
-        "https://www.google.com/maps/search/?api=1&query=${position.latitude},${position.longitude}";
-    String message =
-        "EMERGENCY: SheTorque Hub detected a crash! Rider is unresponsive. Location: $mapLink";
+    if (isDemoMode) {
+      // In demo mode: log to Supabase best-effort, do NOT trigger native SMS
+      _logSosBestEffort('crash', position.latitude, position.longitude);
+      return SmsDispatchResult(
+        success: true,
+        message: message,
+        recipientPhone: contact,
+        recipientName: contactName,
+        isDemo: true,
+      );
+    }
 
-    // 1. Dispatch SMS immediately via native Android channel (critical priority)
-    await _smsChannel.invokeMethod('sendSms', {
-      'phone': contact,
-      'message': message,
-    });
-
-    // 2. Best-effort logging to Supabase in background (never blocks SMS)
-    _logSosBestEffort('crash', position.latitude, position.longitude);
-    return true;
+    try {
+      await _smsChannel.invokeMethod('sendSms', {
+        'phone': contact,
+        'message': message,
+      });
+      _logSosBestEffort('crash', position.latitude, position.longitude);
+      return SmsDispatchResult(
+        success: true,
+        message: message,
+        recipientPhone: contact,
+        recipientName: contactName,
+        isDemo: false,
+      );
+    } catch (e) {
+      debugPrint('SmsService native SMS dispatch error: $e');
+      _logSosBestEffort('crash', position.latitude, position.longitude);
+      return SmsDispatchResult(
+        success: false,
+        message: 'SMS dispatch failed: $e',
+        recipientPhone: contact,
+        recipientName: contactName,
+        isDemo: false,
+      );
+    }
   }
 
-  // Used by SILENT SOS — SMS #1
-  static Future<bool> sendStealthAlert(Position position) async {
+  /// Standard boolean wrapper for Crash Alert to support background safety host.
+  static Future<bool> sendCrashAlert(
+    Position position, {
+    bool isDemoMode = false,
+  }) async {
+    final res = await dispatchCrashAlert(position, isDemoMode: isDemoMode);
+    return res.success;
+  }
+
+  /// Dispatches or simulates Silent SOS alert.
+  static Future<SmsDispatchResult> dispatchStealthAlert(
+    Position position, {
+    bool isDemoMode = false,
+  }) async {
     final contact = await resolveEmergencyContact();
+    final contactName = await resolveEmergencyContactName() ?? 'Emergency Contact';
+    final message = await buildEmergencyMessage(position: position, type: 'silent');
+
     if (contact == null || contact.isEmpty) {
-      debugPrint(
-          'SmsService: Cannot send stealth alert. No emergency contact configured in local cache.');
+      debugPrint('SmsService: Cannot send stealth alert. No contact cached.');
       _logSosBestEffort('silent', position.latitude, position.longitude);
-      return false;
+      return SmsDispatchResult(
+        success: false,
+        message: 'No emergency contact configured in local cache.',
+        recipientPhone: null,
+        recipientName: contactName,
+        isDemo: isDemoMode,
+      );
     }
 
-    String name = await SosSessionManager.getRiderName() ?? "the rider";
-    String mapLink =
-        "https://maps.google.com/?q=${position.latitude},${position.longitude}";
-    String time = _formatTime(DateTime.now());
-    String date = _formatDate(DateTime.now());
+    if (isDemoMode) {
+      _logSosBestEffort('silent', position.latitude, position.longitude);
+      return SmsDispatchResult(
+        success: true,
+        message: message,
+        recipientPhone: contact,
+        recipientName: contactName,
+        isDemo: true,
+      );
+    }
 
-    String message = "[SheTorque] SILENT ALERT\n"
-        "$name may need help.\n\n"
-        "Location: $mapLink\n"
-        "Time: $time, $date\n\n"
-        "DO NOT CALL. Send an SMS or contact authorities.\n"
-        "Location will update every 5 minutes.";
-
-    await _smsChannel.invokeMethod('sendSms', {
-      'phone': contact,
-      'message': message,
-    });
-
-    _logSosBestEffort('silent', position.latitude, position.longitude);
-    return true;
+    try {
+      await _smsChannel.invokeMethod('sendSms', {
+        'phone': contact,
+        'message': message,
+      });
+      _logSosBestEffort('silent', position.latitude, position.longitude);
+      return SmsDispatchResult(
+        success: true,
+        message: message,
+        recipientPhone: contact,
+        recipientName: contactName,
+        isDemo: false,
+      );
+    } catch (e) {
+      debugPrint('SmsService native stealth SMS dispatch error: $e');
+      _logSosBestEffort('silent', position.latitude, position.longitude);
+      return SmsDispatchResult(
+        success: false,
+        message: 'SMS dispatch failed: $e',
+        recipientPhone: contact,
+        recipientName: contactName,
+        isDemo: false,
+      );
+    }
   }
 
-  // Used by SILENT SOS — update SMS
+  /// Standard boolean wrapper for Stealth Alert.
+  static Future<bool> sendStealthAlert(
+    Position position, {
+    bool isDemoMode = false,
+  }) async {
+    final res = await dispatchStealthAlert(position, isDemoMode: isDemoMode);
+    return res.success;
+  }
+
+  /// Used by SILENT SOS — 5-minute periodic location updates.
   static Future<bool> sendLocationUpdate(
-      Position position, int updateCount) async {
+    Position position,
+    int updateCount, {
+    bool isDemoMode = false,
+  }) async {
+    if (isDemoMode) return true;
     final contact = await resolveEmergencyContact();
     if (contact == null || contact.isEmpty) return false;
 
-    String name = await SosSessionManager.getRiderName() ?? "the rider";
-    String mapLink =
+    final riderInfo = await resolveRiderProfileString() ?? 'SheTorque Rider';
+    final mapLink =
         "https://maps.google.com/?q=${position.latitude},${position.longitude}";
-    String time = _formatTime(DateTime.now());
+    final time = _formatTime(DateTime.now());
 
-    String message = "[SheTorque] LOCATION UPDATE (#$updateCount)\n"
-        "$name — updated location:\n\n"
-        "$mapLink\n"
-        "Time: $time\n\n"
-        "Alert still active.";
+    final message = "SheTorque Update (#$updateCount): $riderInfo live location: $mapLink Time: $time";
 
-    await _smsChannel.invokeMethod('sendSms', {
-      'phone': contact,
-      'message': message,
-    });
-    return true;
+    try {
+      await _smsChannel.invokeMethod('sendSms', {
+        'phone': contact,
+        'message': message,
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
-  // Used by SILENT SOS — resolution
-  static Future<bool> sendSafeConfirmation() async {
+  /// Used by SILENT SOS — Safe Confirmation resolution.
+  /// Also marks the active SOS event in Supabase as resolved.
+  static Future<bool> sendSafeConfirmation({bool isDemoMode = false}) async {
+    // 1. Resolve active SOS event in Supabase if logged
+    _resolveActiveSosEvent();
+
+    if (isDemoMode) return true;
+
     final contact = await resolveEmergencyContact();
     if (contact == null || contact.isEmpty) return false;
 
-    String name = await SosSessionManager.getRiderName() ?? "the rider";
-    String time = _formatTime(DateTime.now());
+    final riderInfo = await resolveRiderProfileString() ?? 'SheTorque Rider';
+    final time = _formatTime(DateTime.now());
 
-    String message = "[SheTorque] ALL CLEAR\n"
-        "$name has confirmed she is safe.\n\n"
-        "Time: $time\n"
-        "Location tracking stopped.";
+    final message = "SheTorque ALL CLEAR: $riderInfo confirmed safe. Location tracking stopped. Time: $time";
 
-    await _smsChannel.invokeMethod('sendSms', {
-      'phone': contact,
-      'message': message,
-    });
-    return true;
+    try {
+      await _smsChannel.invokeMethod('sendSms', {
+        'phone': contact,
+        'message': message,
+      });
+      return true;
+    } catch (_) {
+      return false;
+    }
   }
 
   static void _logSosBestEffort(String type, double lat, double lng) {
     try {
-      _sosRepo
-          .logSosEvent(type: type, lat: lat, lng: lng)
-          .catchError((_) => null);
+      _sosRepo.logSosEvent(type: type, lat: lat, lng: lng).then((eventId) {
+        if (eventId != null) {
+          SosSessionManager.setActiveSosEventId(eventId);
+        }
+      }).catchError((_) => null);
+    } catch (_) {}
+  }
+
+  static void _resolveActiveSosEvent() {
+    try {
+      SosSessionManager.getActiveSosEventId().then((eventId) {
+        if (eventId != null && eventId.isNotEmpty) {
+          _sosRepo.resolveSosEvent(eventId).catchError((_) => null);
+          SosSessionManager.setActiveSosEventId(null);
+        }
+      }).catchError((_) => null);
     } catch (_) {}
   }
 
   static String _formatTime(DateTime dt) {
     return "${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}";
-  }
-
-  static String _formatDate(DateTime dt) {
-    return "${dt.day.toString().padLeft(2, '0')}/${dt.month.toString().padLeft(2, '0')}/${dt.year}";
   }
 }

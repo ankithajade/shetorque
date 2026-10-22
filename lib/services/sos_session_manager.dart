@@ -37,6 +37,22 @@ class SosSessionManager {
     return prefs.getBool(kOnboardingComplete) ?? false;
   }
 
+  static const String kActiveSosEventId = 'active_sos_event_id';
+
+  static Future<void> setActiveSosEventId(String? id) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (id == null) {
+      await prefs.remove(kActiveSosEventId);
+    } else {
+      await prefs.setString(kActiveSosEventId, id);
+    }
+  }
+
+  static Future<String?> getActiveSosEventId() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(kActiveSosEventId);
+  }
+
   static Future<void> startSession() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(kStealthSosActive, true);
@@ -47,6 +63,7 @@ class SosSessionManager {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool(kStealthSosActive, false);
     await prefs.remove(kStealthSosStartTime);
+    await prefs.remove(kActiveSosEventId);
   }
 
   static Future<bool> isSessionActive() async {
